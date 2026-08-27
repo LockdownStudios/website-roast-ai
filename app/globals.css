@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #090d14;
+  --foreground: #f6f7fb;
+  --surface: #111826;
+  --surface-soft: #182335;
+  --muted: #9aa5b7;
+  --accent: #f76b1c;
+  --accent-soft: #ffd7b2;
+  --danger: #ef4444;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-bricolage);
+  --font-display: var(--font-anton);
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
+  background-image: none;
+  font-family: var(--font-bricolage), sans-serif;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes breathing {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .lockdown-page {
+    background-color: #020711;
+    background-image: none;
+  }
+
+  .star-field {
+    background-image: none;
+    overflow: hidden;
+  }
+
+  .star-field::before,
+  .star-field::after {
+    content: "";
+    position: absolute;
+    height: 2px;
+    width: 2px;
+    background-color: rgba(255, 255, 255, 0.72);
+    box-shadow:
+      42px 84px rgba(255, 255, 255, 0.78),
+      136px 38px rgba(125, 211, 252, 0.6),
+      220px 146px rgba(255, 255, 255, 0.54),
+      328px 72px rgba(125, 211, 252, 0.5),
+      456px 188px rgba(255, 255, 255, 0.64),
+      612px 42px rgba(255, 255, 255, 0.5),
+      748px 132px rgba(125, 211, 252, 0.48),
+      880px 78px rgba(255, 255, 255, 0.58),
+      1034px 172px rgba(255, 255, 255, 0.46),
+      1190px 92px rgba(125, 211, 252, 0.56);
+  }
+
+  .star-field::after {
+    top: 240px;
+    left: 64px;
+    opacity: 0.62;
+  }
+
+  .rise-in {
+    animation: rise-in 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .rise-in-delayed {
+    animation: rise-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.12s both;
+  }
+
+  .glow-breath {
+    animation: breathing 6s ease-in-out infinite;
+  }
+
+  .mesh-panel {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mesh-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(154, 165, 183, 0.08);
+    background-image: none;
+    box-shadow:
+      inset 24px 0 0 rgba(154, 165, 183, 0.025),
+      inset -24px 0 0 rgba(154, 165, 183, 0.025),
+      inset 0 24px 0 rgba(154, 165, 183, 0.025),
+      inset 0 -24px 0 rgba(154, 165, 183, 0.025);
+    pointer-events: none;
+  }
 }
