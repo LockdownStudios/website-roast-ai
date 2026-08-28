@@ -43,6 +43,10 @@ const ANALYTICS_SELECT = "name,session_id,variant,metadata,created_at";
 const FEEDBACK_SELECT =
   "report_id,user_id,session_id,url,score_at_review,score_accuracy,tone_accuracy,notes,created_at";
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function getSupabaseUrl(): string | null {
   const value = process.env.SUPABASE_URL?.trim();
   return value ? value : null;
@@ -185,11 +189,21 @@ async function supabaseFetch<T>(
       ...init,
       headers,
     });
-  } catch {
+  } catch (error) {
+    console.error("[supabase] request failed", {
+      path,
+      error: toErrorMessage(error),
+    });
     return null;
   }
 
   if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.error("[supabase] request rejected", {
+      path,
+      status: response.status,
+      body: body.slice(0, 800),
+    });
     return null;
   }
 
@@ -230,8 +244,21 @@ async function supabaseWrite(
       headers,
       body: JSON.stringify(body),
     });
-  } catch {
+  } catch (error) {
+    console.error("[supabase] write failed", {
+      path,
+      error: toErrorMessage(error),
+    });
     return false;
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.error("[supabase] write rejected", {
+      path,
+      status: response.status,
+      body: body.slice(0, 800),
+    });
   }
 
   return response.ok;

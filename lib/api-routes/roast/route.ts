@@ -10,7 +10,11 @@ import {
   getRoastResult,
   saveRoastResult,
 } from "@/lib/store";
-import { createScrapeHash, ROAST_ENGINE_VERSION } from "@/lib/fingerprint";
+import {
+  createScrapeHash,
+  createUserScopedScrapeHash,
+  ROAST_ENGINE_VERSION,
+} from "@/lib/fingerprint";
 import {
   sanitizeRoastPayload,
   sanitizeWebsiteScoring,
@@ -146,7 +150,13 @@ export async function POST(request: NextRequest) {
     };
     const scoring = scoreWebsite(scraped);
     const scrapeHash = createScrapeHash(scraped);
-    const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
+    const userScopedScrapeHash = userId
+      ? createUserScopedScrapeHash(scrapeHash, userId)
+      : null;
+    const existing =
+      (userScopedScrapeHash
+        ? await findRoastByUrlAndHash(normalizedUrl, userScopedScrapeHash)
+        : null) ?? (await findRoastByUrlAndHash(normalizedUrl, scrapeHash));
 
     if (existing) {
       const existingWithAccess = existing.roast.access
@@ -160,13 +170,22 @@ export async function POST(request: NextRequest) {
         ? {
             ...existingWithAccess,
             id: crypto.randomUUID(),
+            scrapeHash: userScopedScrapeHash ?? scrapeHash,
             userId,
+            roast: withRoastAccess(
+              existingWithAccess.roast,
+              createFreeTeaserAccess(
+                getRoastAccess(existingWithAccess.roast).priceZar,
+              ),
+            ),
             createdAt: new Date().toISOString(),
           }
         : existingWithAccess;
 
       // Backfill cached/local reports into Supabase when configured.
-      await saveRoastResult(report);
+      if (needsOwnershipClone || !existing.roast.access) {
+        await saveRoastResult(report);
+      }
 
       return NextResponse.json({
         cached: true,
@@ -184,7 +203,7 @@ export async function POST(request: NextRequest) {
       id,
       url: normalizedUrl,
       userId,
-      scrapeHash,
+      scrapeHash: userScopedScrapeHash ?? scrapeHash,
       roast,
       scoring,
       scraped,

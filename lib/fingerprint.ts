@@ -36,3 +36,15 @@ export function createScrapeHash(data: ScrapedWebsiteData): string {
     .update(JSON.stringify(normalized))
     .digest("hex");
 }
+
+export function createUserScopedScrapeHash(
+  scrapeHash: string,
+  userId: string,
+): string {
+  const userHash = createHash("sha256")
+    .update(userId)
+    .digest("hex")
+    .slice(0, 24);
+
+  return `${scrapeHash}:user:${userHash}`;
+}
