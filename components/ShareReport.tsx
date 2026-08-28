@@ -16,6 +16,7 @@ export function ShareReport({ reportId, score, toneSummary }: ShareReportProps) 
     }
     return `${window.location.origin}/result/${reportId}`;
   }, [reportId]);
+  const downloadUrl = `/api/reports/download?id=${encodeURIComponent(reportId)}`;
 
   async function copyLink(): Promise<void> {
     if (!reportUrl) {
@@ -44,7 +45,7 @@ export function ShareReport({ reportId, score, toneSummary }: ShareReportProps) 
   return (
     <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-        Share Report
+        Share & Download
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <button
@@ -54,6 +55,12 @@ export function ShareReport({ reportId, score, toneSummary }: ShareReportProps) 
         >
           {copied ? "Copied" : "Copy Link"}
         </button>
+        <a
+          href={downloadUrl}
+          className="rounded-xl border border-accent/45 bg-accent/10 px-4 py-2 text-center text-xs font-black uppercase tracking-[0.14em] text-accent-soft transition hover:border-accent/70 hover:bg-accent/15"
+        >
+          Download PDF
+        </a>
         <button
           type="button"
           onClick={shareOnX}

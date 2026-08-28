@@ -124,6 +124,7 @@ function toOfficePayload(input: {
   freshness: "fresh" | "cached";
   aiUsed: boolean;
   fallbackUsed: boolean;
+  siteUrl: string;
   generationError?: string;
 }) {
   const scoring = withScoringMeta(input.report, input.freshness);
@@ -132,6 +133,7 @@ function toOfficePayload(input: {
   return {
     id: input.report.id,
     url: input.report.url,
+    reportUrl: new URL(`/result/${input.report.id}`, input.siteUrl).toString(),
     cached: input.freshness === "cached",
     unlocked: true,
     aiUsed: input.aiUsed,
@@ -186,6 +188,7 @@ export async function POST(request: NextRequest) {
     const scoring = scoreWebsite(scraped);
     const scrapeHash = createScrapeHash(scraped);
     const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
 
     if (existing) {
       return NextResponse.json(
@@ -194,6 +197,7 @@ export async function POST(request: NextRequest) {
           freshness: "cached",
           aiUsed: false,
           fallbackUsed: false,
+          siteUrl,
         }),
       );
     }
@@ -217,6 +221,7 @@ export async function POST(request: NextRequest) {
         freshness: "fresh",
         aiUsed: generation.aiUsed,
         fallbackUsed: generation.fallbackUsed,
+        siteUrl,
         generationError: generation.error,
       }),
     );

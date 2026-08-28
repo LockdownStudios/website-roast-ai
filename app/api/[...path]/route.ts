@@ -12,6 +12,7 @@ import { POST as paystackInitializePost } from "@/lib/api-routes/paystack/initia
 import { GET as paystackVerifyGet } from "@/lib/api-routes/paystack/verify/route";
 import { POST as paystackWebhookPost } from "@/lib/api-routes/paystack/webhook/route";
 import { GET as reportsMineGet } from "@/lib/api-routes/reports/mine/route";
+import { GET as reportsDownloadGet } from "@/lib/api-routes/reports/download/route";
 import { POST as reportsUnlockPost } from "@/lib/api-routes/reports/unlock/route";
 import { GET as roastGet, POST as roastPost } from "@/lib/api-routes/roast/route";
 import { POST as trackPost } from "@/lib/api-routes/track/route";
@@ -37,6 +38,7 @@ const routes: Record<string, Partial<Record<ApiMethod, ApiHandler>>> = {
   "paystack/initialize": { POST: paystackInitializePost },
   "paystack/verify": { GET: paystackVerifyGet },
   "paystack/webhook": { POST: paystackWebhookPost },
+  "reports/download": { GET: reportsDownloadGet },
   "reports/mine": { GET: reportsMineGet },
   "reports/unlock": { POST: reportsUnlockPost },
   roast: { GET: roastGet, POST: roastPost },

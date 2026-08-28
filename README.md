@@ -53,6 +53,7 @@ Open `http://localhost:3000`.
 - `POST /api/auth/otp/verify` -> verify OTP code and return auth session
 - `GET /api/auth/me` -> resolve current auth user from bearer token
 - `GET /api/reports/mine` -> fetch current user reports
+- `GET /api/reports/download?id=<reportId>` -> download a stored report PDF
 - `POST /api/reports/unlock` -> temporary mock unlock for full report (payment-ready hook point)
 - `POST /api/paystack/initialize` -> initialize Paystack checkout for full report unlock
 - `GET /api/paystack/verify` -> verify Paystack callback and unlock report

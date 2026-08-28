@@ -15,6 +15,7 @@
 
 # local agent/test artifacts
 /.codex/
+/tmp/
 /tmp-*
 
 # next.js
