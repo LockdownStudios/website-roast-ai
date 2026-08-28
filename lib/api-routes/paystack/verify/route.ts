@@ -75,7 +75,11 @@ export async function GET(request: NextRequest) {
 
     await unlockRoastResult(reportId, "paystack");
     return NextResponse.redirect(resultRedirectUrl(request, reportId, "success"));
-  } catch {
+  } catch (error) {
+    console.error("[paystack/verify] failed", {
+      reference,
+      message: error instanceof Error ? error.message : "Unknown verification error",
+    });
     return NextResponse.redirect(genericFallbackUrl(request, "verification_error"));
   }
 }

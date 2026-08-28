@@ -91,7 +91,12 @@ export async function POST(request: NextRequest) {
 
     await unlockRoastResult(reportId, "paystack");
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    console.error("[paystack/webhook] verification failed", {
+      reference,
+      reportId: reportIdFromMetadata,
+      message: error instanceof Error ? error.message : "Unknown webhook verification error",
+    });
     return NextResponse.json({ error: "Verification failed." }, { status: 500 });
   }
 }

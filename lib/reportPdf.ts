@@ -114,6 +114,8 @@ function drawCover(
   const width = doc.page.width;
   const height = doc.page.height;
   const subject = reportSubject(report.url, report.scraped);
+  const firstImpression = cleanReportText(report.roast.first_impression, subject);
+  const firstMistake = cleanList(report.roast.mistakes, subject, 1)[0] || report.roast.single_biggest_leak;
 
   doc.rect(0, 0, width, height).fill(ROAST_BLACK);
   doc.rect(0, 0, width, 170).fill(ROAST_SURFACE);
@@ -163,6 +165,31 @@ function drawCover(
       .fillColor(ROAST_TEXT)
       .text(cleanText(detail), 60, y + 10, { width: width - 285 });
     y += 42;
+  });
+
+  const briefY = 562;
+  doc.roundedRect(48, briefY, width - 96, 126, 8).fillAndStroke(ROAST_SURFACE, ROAST_LINE);
+  doc.rect(48, briefY, 7, 126).fill(ROAST_ACCENT);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor(ROAST_ACCENT_SOFT)
+    .text("QUICK READ", 66, briefY + 16, { characterSpacing: 0.8 });
+  doc.font("Helvetica").fontSize(10.5).fillColor(ROAST_TEXT).text(firstImpression, 66, briefY + 36, {
+    width: width - 132,
+    height: 42,
+    ellipsis: true,
+    lineGap: 3,
+  });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(9)
+    .fillColor(ROAST_MUTED)
+    .text("TOP LEAK", 66, briefY + 86, { characterSpacing: 0.8 });
+  doc.font("Helvetica").fontSize(10).fillColor(ROAST_TEXT).text(cleanText(firstMistake), 126, briefY + 84, {
+    width: width - 174,
+    height: 30,
+    ellipsis: true,
   });
 
   doc
@@ -268,6 +295,7 @@ function drawLockedNotice(doc: PDFKit.PDFDocument, access: ReportAccess) {
 
 function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
   ensureRoom(doc, 56);
+  doc.x = doc.page.margins.left;
   doc
     .font("Helvetica-Bold")
     .fontSize(16)
@@ -283,6 +311,7 @@ function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
 
 function drawSubheading(doc: PDFKit.PDFDocument, title: string) {
   ensureRoom(doc, 32);
+  doc.x = doc.page.margins.left;
   doc
     .font("Helvetica-Bold")
     .fontSize(11)

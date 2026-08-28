@@ -19,6 +19,7 @@ import {
   sanitizeRoastPayload,
   sanitizeWebsiteScoring,
 } from "@/lib/reportSanitizer";
+import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
 import type { ScrapedWebsiteData, StoredRoastReport, WebsiteScoring } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -127,6 +128,18 @@ function toClientReportPayload(
 }
 
 export async function POST(request: NextRequest) {
+  const rate = rateLimit(`public-roast:${clientIpFromHeaders(request.headers)}`, {
+    limit: 8,
+    windowMs: 60_000,
+  });
+
+  if (rate.limited) {
+    return NextResponse.json(
+      { error: "Too many roast requests. Give it a minute and try again." },
+      { status: 429, headers: rateLimitHeaders(rate) },
+    );
+  }
+
   try {
     const body = (await request.json()) as { url?: string };
     const normalizedUrl = normalizeUrl(body.url ?? "");

@@ -15,6 +15,7 @@ import {
   findRoastByUrlAndHash,
   saveRoastResult,
 } from "@/lib/store";
+import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
 import { analyzeVisualSignals } from "@/lib/visual";
 import type {
   ScrapedWebsiteData,
@@ -152,6 +153,18 @@ function unauthorized() {
 }
 
 export async function POST(request: NextRequest) {
+  const rate = rateLimit(`office-roast:${clientIpFromHeaders(request.headers)}`, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+
+  if (rate.limited) {
+    return NextResponse.json(
+      { error: "Too many office roast requests. Wait a minute and retry." },
+      { status: 429, headers: rateLimitHeaders(rate) },
+    );
+  }
+
   const expectedSecret = getOfficeRoastSecret();
 
   if (!expectedSecret) {

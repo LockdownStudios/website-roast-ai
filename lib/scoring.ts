@@ -552,7 +552,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     addAdjustment(
       penalties,
       "Thin Content",
-      7,
+      5,
       "Thin copy leaves buyers without enough information to trust or act.",
     );
   }
@@ -616,7 +616,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   bonuses.push(...visualImpact.bonuses);
 
   const penaltyTotal = Math.min(
-    24,
+    23,
     penalties.reduce((sum, item) => sum + item.points, 0),
   );
   const bonusTotal = Math.min(

@@ -110,6 +110,10 @@ export async function POST(request: NextRequest) {
         ? error.message
         : "Failed to initialize Paystack checkout.";
 
+    console.error("[paystack/initialize] failed", {
+      message,
+    });
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

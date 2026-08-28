@@ -6,14 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test:benchmark": "tsx -e \"import { runBenchmarkSuite } from './lib/benchmark.ts'; const result = runBenchmarkSuite(); console.log(JSON.stringify(result.summary, null, 2)); if (!result.summary.overallPass) process.exit(1);\"",
+    "test:reports": "node --conditions react-server --import tsx scripts/verify-report-fixture.ts",
+    "ci": "npm run typecheck && npm run lint && npm run test:benchmark && npm run test:reports && npm audit --audit-level=high && npm run build"
   },
   "dependencies": {
     "next": "16.3.3",
     "pdfkit": "^0.20.1",
     "playwright": "^1.59.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -24,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

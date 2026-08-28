@@ -1,0 +1,127 @@
+{
+  "id": "fixture-roast-report-0001",
+  "url": "https://lockdownstudios.example",
+  "scrapeHash": "fixture-hash",
+  "userId": "fixture-user",
+  "createdAt": "2026-08-28T08:00:00.000Z",
+  "scraped": {
+    "url": "https://lockdownstudios.example",
+    "title": "Lockdown Studios | Websites That Turn Visitors Into Leads",
+    "description": "Conversion-focused websites for service businesses that need clearer leads.",
+    "headings": {
+      "h1": ["Websites That Turn Visitors Into Leads"],
+      "h2": ["Clear Offer", "Proof", "Book a Call"]
+    },
+    "content": "Lockdown Studios builds conversion-focused websites for local service businesses. The page shows a clear offer, visible proof, and a practical call booking path. It still needs a sharper mobile CTA and stronger before-after examples.",
+    "contentSnippet": "Lockdown Studios builds conversion-focused websites for local service businesses. The page shows a clear offer, visible proof, and a practical call booking path.",
+    "ctas": ["book a call", "request a quote"],
+    "trustSignals": ["case studies", "testimonials", "before and after"],
+    "contactSignals": ["hello@lockdownstudios.example"],
+    "genericPhrasesFound": [],
+    "visualHints": {
+      "aboveFoldCtaLikely": true,
+      "heroHeadingEarly": true,
+      "formAboveFoldLikely": false,
+      "trustTokenAboveFold": true,
+      "buttonCount": 4,
+      "linkCount": 16
+    },
+    "visualAudit": {
+      "available": true,
+      "sampledAt": "2026-08-28T08:00:00.000Z",
+      "summary": {
+        "ctaProminence": 72,
+        "readability": 81,
+        "hierarchy": 74,
+        "consistency": 78,
+        "motionDistraction": 12
+      },
+      "findings": ["Primary CTA is visible but could use stronger contrast on mobile."],
+      "evidence": ["Desktop and mobile samples show clear hierarchy above the fold."]
+    },
+    "contentLength": 221,
+    "retryUsed": false,
+    "usedRelaxedFallback": false,
+    "scrapeQuality": "medium"
+  },
+  "scoring": {
+    "score": 7.2,
+    "rawScore": 72,
+    "confidence": 88,
+    "analysisMeta": {
+      "engineVersion": "fixture",
+      "generatedAt": "2026-08-28T08:00:00.000Z",
+      "freshness": "fresh",
+      "sourcePageCount": 1,
+      "crawlStrategy": "single_page"
+    },
+    "breakdown": {
+      "clarity": 20,
+      "trust": 18,
+      "CTA": 14,
+      "differentiation": 13,
+      "design_hint": 7
+    },
+    "findings": [
+      "Offer is clear but the mobile CTA should be more prominent.",
+      "Proof exists, but before-after examples should move higher."
+    ],
+    "evidence": [
+      "CTA signals found: book a call, request a quote.",
+      "Trust signals found: case studies, testimonials, before and after."
+    ],
+    "penalties": [
+      {
+        "label": "Mobile CTA",
+        "points": 3,
+        "reason": "Mobile users need a stronger next-step path."
+      }
+    ],
+    "bonuses": [
+      {
+        "label": "Proof Stack",
+        "points": 3,
+        "reason": "Visible proof increases buyer confidence."
+      }
+    ],
+    "singleBiggestLeak": "The mobile visitor needs a clearer next step before scrolling."
+  },
+  "roast": {
+    "score": 7.2,
+    "score_label": "Strong Foundation",
+    "first_impression": "This site has a real offer and enough proof to feel credible, but the lead path can be sharper on mobile.",
+    "single_biggest_leak": "The mobile CTA is not doing enough work above the fold.",
+    "mistakes": [
+      "The strongest proof is lower than it should be.",
+      "The first CTA could be more specific than a generic booking prompt.",
+      "Before-after evidence is mentioned but not framed as a conversion story."
+    ],
+    "lost_customers": "Warm visitors may understand the service but delay action because the proof and next step do not appear together quickly enough.",
+    "quick_fixes": [
+      "Move one before-after result into the first screen.",
+      "Change the primary CTA to Book a 15-minute website review.",
+      "Add one short client outcome beside the booking button."
+    ],
+    "high_impact": "Pair the CTA with one proof point above the fold so visitors can trust and act in the same moment.",
+    "tone_summary": "Direct, practical, and conversion-focused.",
+    "evidence": [
+      "Primary CTA exists.",
+      "Trust signals exist.",
+      "Mobile CTA prominence can improve."
+    ],
+    "claim_contract": [
+      {
+        "claim": "The site has a clear offer.",
+        "source": "h1",
+        "evidence": "Websites That Turn Visitors Into Leads",
+        "severity": "low"
+      }
+    ],
+    "access": {
+      "tier": "full_unlocked",
+      "priceZar": 50,
+      "unlockSource": "office",
+      "unlockedAt": "2026-08-28T08:00:00.000Z"
+    }
+  }
+}

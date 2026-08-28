@@ -91,7 +91,7 @@ Open `http://localhost:3000`.
 1. Tune scoring logic in `lib/scoring.ts`.
 2. Run benchmark suite:
 ```bash
-npx tsx -e "import { runBenchmarkSuite } from './lib/benchmark.ts'; console.log(JSON.stringify(runBenchmarkSuite(), null, 2));"
+npm run test:benchmark
 ```
 3. Verify:
 - `summary.scorePassRate` and `summary.repeatabilityPassRate`
@@ -166,3 +166,20 @@ curl -X POST http://localhost:3000/api/internal/calibrate \
 - `/analytics` and `GET /api/track/summary` are protected by HTTP Basic Auth.
 - Set `ADMIN_DASH_USER` and `ADMIN_DASH_PASSWORD` in `.env.local`.
 - Restart `npm run dev` after updating env vars.
+
+## Quality Checks
+
+Run the same checks used by CI:
+
+```bash
+npm run ci
+```
+
+Useful focused checks:
+
+```bash
+npm run test:benchmark
+npm run test:reports
+```
+
+`test:reports` generates a fixed fixture PDF at `tmp/pdfs/roast-report-fixture.pdf` so report design regressions are easy to spot before deployment.

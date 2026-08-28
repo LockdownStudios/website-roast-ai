@@ -808,6 +808,12 @@ export async function saveRoastResult(report: StoredRoastReport): Promise<void> 
         return;
       }
 
+      console.error("[store] Supabase save returned false", {
+        reportId: report.id,
+        url: report.url,
+        hasUserId: Boolean(report.userId),
+      });
+
       if (isVercelRuntime()) {
         throw new Error("Failed to save report to Supabase.");
       }
@@ -914,5 +920,9 @@ export async function unlockRoastResult(
     roast: withRoastAccess(report.roast, createUnlockedAccess(currentAccess, source)),
   };
   await saveRoastResult(unlocked);
+  console.info("[store] roast report unlocked", {
+    reportId,
+    source,
+  });
   return unlocked;
 }
