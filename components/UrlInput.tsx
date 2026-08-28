@@ -3,7 +3,7 @@
 import { FormEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackClientEvent } from "@/lib/clientAnalytics";
-import { getAccessToken } from "@/lib/clientAuth";
+import { clearAuthSession, getAccessToken } from "@/lib/clientAuth";
 import type { LandingVariant, ScrapeQuality } from "@/lib/types";
 
 type UrlInputProps = {
@@ -112,6 +112,7 @@ export function UrlInput({
       const payload = (await response.json()) as {
         id?: string;
         cached?: boolean;
+        authExpired?: boolean;
         error?: string;
         scoring?: {
           confidence?: number;
@@ -132,6 +133,10 @@ export function UrlInput({
         throw new Error(
           payload.error ?? "Roast failed. The site might be blocking crawlers.",
         );
+      }
+
+      if (payload.authExpired) {
+        clearAuthSession();
       }
 
       const confidence = payload.scrapeMeta?.confidence ?? payload.scoring?.confidence;

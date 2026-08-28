@@ -34,10 +34,6 @@ export function scoreVisualAudit(scrapedData: ScrapedWebsiteData): VisualScoreIm
   }
 
   if (!visualAudit.available || !visualAudit.summary) {
-    if (visualAudit.reason) {
-      findings.push(`Visual analysis unavailable: ${visualAudit.reason}.`);
-      evidence.push(`Visual analysis unavailable: ${visualAudit.reason}.`);
-    }
     return { penalties, bonuses, findings, evidence };
   }
 

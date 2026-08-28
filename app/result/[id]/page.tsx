@@ -6,6 +6,7 @@ import { ShareReport } from "@/components/ShareReport";
 import { RoastFeedback } from "@/components/RoastFeedback";
 import { UnlockFullReport } from "@/components/UnlockFullReport";
 import { buildTeaserRoast, getRoastAccess, isRoastUnlocked } from "@/lib/reportAccess";
+import { sanitizeStoredRoastReport } from "@/lib/reportSanitizer";
 import { getRoastResult } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -54,9 +55,10 @@ export default async function ResultPage({ params, searchParams }: ResultPagePro
     );
   }
 
-  const access = getRoastAccess(report.roast);
-  const unlocked = isRoastUnlocked(report.roast);
-  const roastForView = unlocked ? report.roast : buildTeaserRoast(report.roast);
+  const safeReport = sanitizeStoredRoastReport(report);
+  const access = getRoastAccess(safeReport.roast);
+  const unlocked = isRoastUnlocked(safeReport.roast);
+  const roastForView = unlocked ? safeReport.roast : buildTeaserRoast(safeReport.roast);
   const paymentStatus = query.payment === "success" || query.payment === "failed"
     ? query.payment
     : null;
@@ -65,22 +67,22 @@ export default async function ResultPage({ params, searchParams }: ResultPagePro
       ? query.freshness
       : "cached";
   const scoringForView = {
-    ...report.scoring,
+    ...safeReport.scoring,
     analysisMeta: {
-      engineVersion: report.scoring.analysisMeta?.engineVersion ?? "unknown",
-      generatedAt: report.scoring.analysisMeta?.generatedAt ?? report.createdAt,
+      engineVersion: safeReport.scoring.analysisMeta?.engineVersion ?? "unknown",
+      generatedAt: safeReport.scoring.analysisMeta?.generatedAt ?? safeReport.createdAt,
       freshness: freshnessHint,
       sourcePageCount:
-        report.scoring.analysisMeta?.sourcePageCount ?? report.scraped.crawl?.pageCount ?? 1,
+        safeReport.scoring.analysisMeta?.sourcePageCount ?? safeReport.scraped.crawl?.pageCount ?? 1,
       crawlStrategy:
-        report.scoring.analysisMeta?.crawlStrategy ?? report.scraped.crawl?.strategy ?? "single_page",
+        safeReport.scoring.analysisMeta?.crawlStrategy ?? safeReport.scraped.crawl?.strategy ?? "single_page",
     },
   };
   const paymentReason = normalizePaymentReason(query.reason);
 
   return (
     <main className="min-h-screen px-6 py-12">
-      <ResultViewTracker reportId={report.id} score={report.roast.score} />
+      <ResultViewTracker reportId={safeReport.id} score={safeReport.roast.score} />
       <div className="mx-auto mb-6 flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <Link
           href="/"
@@ -100,36 +102,36 @@ export default async function ResultPage({ params, searchParams }: ResultPagePro
           Payment was not completed. {paymentReason ? `Reason: ${paymentReason}.` : ""} You can try again below.
         </div>
       ) : null}
-      <RoastResult
+        <RoastResult
         roast={roastForView}
         scoring={scoringForView}
-        url={report.url}
-        scraped={report.scraped}
+        url={safeReport.url}
+        scraped={safeReport.scraped}
         access={access}
         isUnlocked={unlocked}
       />
 
       {!unlocked ? (
         <div className="mx-auto mt-6 w-full max-w-5xl">
-          <UnlockFullReport reportId={report.id} priceZar={access.priceZar} />
+          <UnlockFullReport reportId={safeReport.id} priceZar={access.priceZar} />
         </div>
       ) : null}
 
       {unlocked ? (
         <div className="mx-auto mt-6 w-full max-w-5xl">
           <RoastFeedback
-            reportId={report.id}
-            url={report.url}
-            score={report.roast.score}
+            reportId={safeReport.id}
+            url={safeReport.url}
+            score={safeReport.roast.score}
           />
         </div>
       ) : null}
       {unlocked ? (
         <div className="mx-auto mt-6 w-full max-w-5xl">
           <ShareReport
-            reportId={report.id}
-            score={report.roast.score}
-            toneSummary={report.roast.tone_summary}
+            reportId={safeReport.id}
+            score={safeReport.roast.score}
+            toneSummary={safeReport.roast.tone_summary}
           />
         </div>
       ) : null}

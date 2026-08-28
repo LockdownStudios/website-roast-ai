@@ -11,6 +11,10 @@ import {
   saveRoastResult,
 } from "@/lib/store";
 import { createScrapeHash, ROAST_ENGINE_VERSION } from "@/lib/fingerprint";
+import {
+  sanitizeRoastPayload,
+  sanitizeWebsiteScoring,
+} from "@/lib/reportSanitizer";
 import type { ScrapedWebsiteData, StoredRoastReport, WebsiteScoring } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -48,9 +52,31 @@ function buildScrapeMeta(scraped: ScrapedWebsiteData, scoring: WebsiteScoring) {
   };
 }
 
+function isWebsiteFetchError(message: string) {
+  return message.toLowerCase().includes("could not fetch website content");
+}
+
+function toClientRoastError(message: string) {
+  if (/enotfound|getaddrinfo/i.test(message)) {
+    return "That domain could not be found. Check the spelling, or try the live website URL with the right .com or .co.za ending.";
+  }
+
+  const httpStatus = message.match(/HTTP\s+(\d{3})/i)?.[1];
+  if (httpStatus) {
+    return `That website rejected the scan with HTTP ${httpStatus}. Try the full homepage URL or another public page.`;
+  }
+
+  if (isWebsiteFetchError(message)) {
+    return "Could not fetch that website. Check the URL and try again.";
+  }
+
+  return message;
+}
+
 function toClientReportPayload(
   report: StoredRoastReport,
   freshness: "fresh" | "cached",
+  options: { authExpired?: boolean } = {},
 ) {
   const unlocked = isRoastUnlocked(report.roast);
   const roast = unlocked ? report.roast : buildTeaserRoast(report.roast);
@@ -72,6 +98,7 @@ function toClientReportPayload(
     },
   };
 
+  const safeRoast = sanitizeRoastPayload(roast);
   const scoring = unlocked
     ? scoringWithMeta
     : {
@@ -81,14 +108,17 @@ function toClientReportPayload(
         penalties: [],
         bonuses: [],
       };
+  const safeScoring = sanitizeWebsiteScoring(scoring);
+
   return {
     id: report.id,
     url: report.url,
-    scoring,
-    roast,
+    scoring: safeScoring,
+    roast: safeRoast,
     access: getRoastAccess(report.roast),
     unlocked,
-    scrapeMeta: buildScrapeMeta(report.scraped, scoringWithMeta),
+    authExpired: options.authExpired ? true : undefined,
+    scrapeMeta: buildScrapeMeta(report.scraped, safeScoring),
   };
 }
 
@@ -98,12 +128,7 @@ export async function POST(request: NextRequest) {
     const normalizedUrl = normalizeUrl(body.url ?? "");
     const token = extractBearerToken(request.headers.get("authorization"));
     const user = token ? await getSupabaseUserFromAccessToken(token) : null;
-    if (token && !user) {
-      return NextResponse.json(
-        { error: "Your login session expired. Sign in again to save reports." },
-        { status: 401 },
-      );
-    }
+    const authExpired = Boolean(token && !user);
     const userId = user?.id;
 
     if (!normalizedUrl) {
@@ -145,7 +170,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         cached: true,
-        ...toClientReportPayload(report, "cached"),
+        ...toClientReportPayload(report, "cached", { authExpired }),
       });
     }
 
@@ -167,14 +192,21 @@ export async function POST(request: NextRequest) {
     };
     await saveRoastResult(report);
 
-    return NextResponse.json(toClientReportPayload(report, "fresh"));
+    return NextResponse.json(toClientReportPayload(report, "fresh", { authExpired }));
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : "Failed to roast this website. Try another URL.";
+    const status = isWebsiteFetchError(message) ? 400 : 500;
+    const clientMessage = toClientRoastError(message);
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[api/roast] failed", {
+      message,
+      status,
+    });
+
+    return NextResponse.json({ error: clientMessage }, { status });
   }
 }
 

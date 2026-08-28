@@ -89,13 +89,23 @@ function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function cleanUnavailableReason(reason: string): string {
+  if (/playwright|browserType\.launch|chromium|executable/i.test(reason)) {
+    return "visual rendering is unavailable in this environment";
+  }
+
+  return reason.trim() || "visual rendering is unavailable";
+}
+
 function unavailableAudit(reason: string): VisualAudit {
+  const cleanReason = cleanUnavailableReason(reason);
+
   return {
     available: false,
     sampledAt: nowIso(),
-    reason,
-    findings: [`Visual analysis unavailable: ${reason}`],
-    evidence: [`Visual analysis unavailable: ${reason}`],
+    reason: cleanReason,
+    findings: [],
+    evidence: [],
   };
 }
 

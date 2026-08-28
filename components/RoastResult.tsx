@@ -166,6 +166,14 @@ function reportSubject(url: string, scraped?: ScrapedWebsiteData): string {
 }
 
 function cleanReportText(value: string, subject: string): string {
+  if (
+    /visual analysis unavailable|browsertype\.launch|playwright install|chrome-headless-shell/i.test(
+      value,
+    )
+  ) {
+    return "";
+  }
+
   return value
     .replace(/\blocalhost(?::\d+)?\b/gi, subject)
     .replace(/\b127\.0\.0\.1(?::\d+)?\b/g, subject)

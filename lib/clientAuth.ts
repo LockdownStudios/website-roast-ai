@@ -131,6 +131,7 @@ export async function fetchCurrentAuthUser(
     };
 
     if (!response.ok || !payload.user || typeof payload.user.id !== "string") {
+      clearAuthSession();
       return null;
     }
 
