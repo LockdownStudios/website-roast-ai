@@ -591,7 +591,7 @@ function formatPriorityLine(value: string): string {
 }
 
 function cleanReportText(value: string, subject: string): string {
-  return cleanText(decodeHtmlEntities(value))
+  const cleaned = cleanText(decodeHtmlEntities(value))
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
@@ -601,10 +601,25 @@ function cleanReportText(value: string, subject: string): string {
     .replace(/\b0\.0\.0\.0(?::\d+)?\b/g, subject)
     .replace(/\bTrust snapshot:/gi, "Proof gap:")
     .replace(/\bCurrent contact snapshot:/gi, "Contact gap:");
+
+  if (hasMalformedReportText(cleaned)) {
+    return `${subject} has a credibility gap: the page asks for trust before showing enough proof near the main action.`;
+  }
+
+  return cleaned;
 }
 
 function cleanText(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function hasMalformedReportText(value: string) {
+  return (
+    /(^|[\s([{])"[^"]+"[a-z]/i.test(value) ||
+    /(^|[\s([{])"[^"]+"\s*"[^"]+"/i.test(value) ||
+    /"[^"]+"\s*the current homepage headline/i.test(value) ||
+    /\basks\s+For\s+buyers\b/i.test(value)
+  );
 }
 
 function truncateAtWord(value: string, limit: number): string {

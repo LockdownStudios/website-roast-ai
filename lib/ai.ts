@@ -600,9 +600,11 @@ function containsAnyPhrase(text: string, phrases: string[]): boolean {
 
 function hasMalformedNarrative(text: string): boolean {
   return (
-    /"[^"]+"[a-z]/i.test(text) ||
-    /"[^"]+"\s*"[^"]+"/i.test(text) ||
-    /\b(the current homepage headline|request a quote|call us|contact us)"[a-z]/i.test(text)
+    /(^|[\s([{])"[^"]+"[a-z]/i.test(text) ||
+    /(^|[\s([{])"[^"]+"\s*"[^"]+"/i.test(text) ||
+    /\b(the current homepage headline|request a quote|call us|contact us)"[a-z]/i.test(text) ||
+    /"[^"]+"\s*the current homepage headline/i.test(text) ||
+    /\basks\s+For\s+buyers\b/i.test(text)
   );
 }
 
@@ -872,7 +874,7 @@ function uniqueNarrativeLines(items: string[], limit = 5): string[] {
       .trim();
     const human = humanSignal(cleaned);
     const key = human.toLowerCase();
-    if (!human || seen.has(key)) {
+    if (!human || seen.has(key) || hasMalformedNarrative(human)) {
       continue;
     }
     seen.add(key);
@@ -1286,7 +1288,7 @@ function enforceRoastIntensity(
   const fallbackMistakePool = fallbackRoastMistakes(scrapedData, scoringData);
   const sharpenedMistakes = incomingMistakes
     .map((item, index) =>
-      isSoft(item) || !hasSiteSpecificDetail(item, scrapedData)
+      hasMalformedNarrative(item) || isSoft(item) || !hasSiteSpecificDetail(item, scrapedData)
         ? fallbackMistakePool[index % Math.max(1, fallbackMistakePool.length)] ??
           `${roastHook} ${item}`
         : item,
