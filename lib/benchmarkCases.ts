@@ -125,6 +125,49 @@ export const benchmarkCases: BenchmarkCase[] = [
     }),
   },
   {
+    id: "construction-keyword-stuffed-contact",
+    label: "Construction site with SEO-stuffed headline and soft CTA",
+    expectedScoreRange: [4.8, 6.3],
+    mustFlag: [],
+    mustPenalty: ["Keyword-Stuffed Headline", "Mismatched CTA Goal"],
+    scraped: buildScraped({
+      url: "https://constructioncompany-pretoria.co.za/",
+      title: "Construction Company Pretoria: Hire Pretoria Building Contractors",
+      description:
+        "Construction Company Pretoria provides residential, commercial, and industrial building services in Pretoria, Centurion, and Tshwane.",
+      headings: {
+        h1: [
+          "Construction Company Pretoria: Complete Residential, Commercial, and Industrial Building Services by Top Pretoria Building Contractors in Pretoria, East, North, Centurion & Tshwane",
+        ],
+        h2: [
+          "Building Contractors Pretoria",
+          "Residential Construction Pretoria",
+          "Commercial Construction Services",
+          "Contact Construction Company Pretoria",
+        ],
+      },
+      content:
+        "Construction Company Pretoria offers building contractors, renovations, paving, roofing, and construction services across Pretoria and Centurion. " +
+        "The page repeats construction and Pretoria terms heavily and asks visitors to contact the company instead of pushing one clear quote request. " +
+        "The company mentions years of experience, a workmanship guarantee, and 5-star service claims. " +
+        "Email info@constructioncompany-pretoria.co.za or WhatsApp 060 551 9245 for building work.",
+      ctas: ["contact", "contact us"],
+      trustSignals: ["years of experience", "guarantee", "5-star"],
+      contactSignals: [
+        "Email: info@constructioncompany-pretoria.co.za",
+        "Phone: 060 551 9245",
+      ],
+      visualHints: {
+        aboveFoldCtaLikely: true,
+        heroHeadingEarly: true,
+        formAboveFoldLikely: true,
+        trustTokenAboveFold: false,
+        buttonCount: 2,
+        linkCount: 32,
+      },
+    }),
+  },
+  {
     id: "blog-heavy-no-offer",
     label: "Blog-heavy site with no clear offer",
     expectedScoreRange: [0.3, 4.5],

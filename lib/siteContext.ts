@@ -65,16 +65,18 @@ const NICHE_RULES: NicheRule[] = [
     niche: "ecommerce",
     label: "Ecommerce",
     keywords: [
-      "shop",
-      "store",
       "checkout",
       "cart",
       "add to cart",
-      "product",
-      "products",
       "buy now",
+      "shop now",
       "shipping",
       "order",
+      "free shipping",
+      "returns",
+      "wishlist",
+      "new arrivals",
+      "best sellers",
     ],
   },
   {
@@ -107,6 +109,12 @@ const NICHE_RULES: NicheRule[] = [
       "eye",
       "hospital",
       "health",
+      "dentist",
+      "aesthetic",
+      "aesthetics",
+      "physiotherapy",
+      "physio",
+      "practice",
     ],
   },
   {
@@ -121,6 +129,29 @@ const NICHE_RULES: NicheRule[] = [
       "emergency",
       "installation",
       "contractor",
+      "contractors",
+      "construction",
+      "building",
+      "builder",
+      "builders",
+      "renovation",
+      "renovations",
+      "paving",
+      "landscaping",
+      "roofing",
+      "waterproofing",
+      "painting",
+      "carpentry",
+      "tiling",
+      "solar",
+      "inverter",
+      "backup power",
+      "cctv",
+      "security",
+      "alarm",
+      "gate automation",
+      "electric fence",
+      "access control",
       "call out",
       "quote",
     ],
@@ -139,6 +170,16 @@ const NICHE_RULES: NicheRule[] = [
       "wealth",
       "audit",
       "compliance",
+      "attorney",
+      "attorneys",
+      "law firm",
+      "accountant",
+      "bookkeeping",
+      "bookkeeper",
+      "tax",
+      "broker",
+      "insurance",
+      "estate agent",
     ],
   },
   {
@@ -296,7 +337,47 @@ const VISUAL_THRESHOLDS_BY_NICHE: Record<SiteNiche, VisualThresholdProfile> = {
 };
 
 function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return decodeHtmlEntities(value).replace(/\s+/g, " ").trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) =>
+      entityFromCodePoint(match, Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (match, decimal: string) =>
+      entityFromCodePoint(match, Number.parseInt(decimal, 10)),
+    );
+}
+
+function entityFromCodePoint(fallback: string, codePoint: number): string {
+  if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
+    return fallback;
+  }
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return fallback;
+  }
+}
+
+function truncateAtWord(value: string, limit: number): string {
+  const cleaned = normalizeWhitespace(value);
+  if (cleaned.length <= limit) {
+    return cleaned;
+  }
+
+  const clipped = cleaned.slice(0, Math.max(0, limit - 3));
+  const wordSafe = clipped.replace(/\s+\S*$/, "").trim();
+  return `${(wordSafe.length >= limit * 0.65 ? wordSafe : clipped).trim()}...`;
 }
 
 function corpusFromScraped(scraped: ScrapedWebsiteData): string {
@@ -313,8 +394,13 @@ function corpusFromScraped(scraped: ScrapedWebsiteData): string {
 }
 
 function pickPrimaryCta(scraped: ScrapedWebsiteData): string {
-  if (scraped.ctas.length > 0) {
-    return normalizeWhitespace(scraped.ctas[0]).slice(0, 80);
+  const ranked = [...scraped.ctas]
+    .map((cta) => normalizeWhitespace(cta))
+    .filter(Boolean)
+    .sort((left, right) => ctaStrength(right) - ctaStrength(left));
+
+  if (ranked.length > 0) {
+    return truncateAtWord(ranked[0], 80);
   }
   return "No strong CTA detected";
 }
@@ -322,32 +408,161 @@ function pickPrimaryCta(scraped: ScrapedWebsiteData): string {
 function pickOfferHeadline(scraped: ScrapedWebsiteData): string {
   const fromH1 = scraped.headings.h1.find((item) => normalizeWhitespace(item).length >= 6);
   if (fromH1) {
-    return normalizeWhitespace(fromH1).slice(0, 120);
+    return truncateAtWord(fromH1, 120);
   }
   const fromTitle = normalizeWhitespace(scraped.title);
   if (fromTitle && fromTitle !== "No title found.") {
-    return fromTitle.slice(0, 120);
+    return truncateAtWord(fromTitle, 120);
   }
   return "No clear offer headline detected";
 }
 
 export function inferSiteNiche(scraped: ScrapedWebsiteData): SiteNiche {
   const corpus = corpusFromScraped(scraped);
-  let bestNiche: SiteNiche = "generic";
-  let bestScore = 0;
+  const ctaCorpus = scraped.ctas.join(" ").toLowerCase();
+  const scores = Object.fromEntries(
+    NICHE_RULES.map((rule) => [rule.niche, 0]),
+  ) as Record<SiteNiche, number>;
+  scores.generic = 0;
 
   for (const rule of NICHE_RULES) {
-    const hitCount = rule.keywords.reduce((sum, keyword) => {
-      return sum + (corpus.includes(keyword) ? 1 : 0);
-    }, 0);
+    scores[rule.niche] = keywordHitCount(corpus, rule.keywords);
+  }
 
-    if (hitCount > bestScore) {
-      bestNiche = rule.niche;
-      bestScore = hitCount;
+  const ecommerceIntent = ecommerceIntentScore(corpus, ctaCorpus);
+  const serviceIntent = serviceIntentScore(scraped, corpus, ctaCorpus);
+  const serviceNiche = strongestServiceNiche(scores);
+
+  if (scores.mobile_game >= 2 && scores.mobile_game >= scores.saas) {
+    return "mobile_game";
+  }
+
+  if (
+    scores.saas >= 3 &&
+    scores.saas >= scores.ecommerce &&
+    scores.saas >= scores[serviceNiche]
+  ) {
+    return "saas";
+  }
+
+  if (
+    scores.ecommerce >= 2 &&
+    ecommerceIntent >= 3 &&
+    ecommerceIntent >= serviceIntent + 1
+  ) {
+    return "ecommerce";
+  }
+
+  if (scores[serviceNiche] > 0 && serviceIntent >= 2) {
+    return serviceNiche;
+  }
+
+  let bestNiche: SiteNiche = "generic";
+  let bestScore = 0;
+  for (const [niche, score] of Object.entries(scores) as Array<[SiteNiche, number]>) {
+    if (score > bestScore) {
+      bestNiche = niche;
+      bestScore = score;
     }
   }
 
+  if (bestNiche === "ecommerce" && ecommerceIntent < 3 && scores[serviceNiche] > 0) {
+    return serviceNiche;
+  }
+
   return bestNiche;
+}
+
+const SERVICE_NICHES: SiteNiche[] = [
+  "local_service",
+  "professional_service",
+  "healthcare",
+  "creative_agency",
+];
+
+const ECOMMERCE_INTENT_SIGNALS = [
+  "add to cart",
+  "checkout",
+  "cart",
+  "buy now",
+  "shop now",
+  "shop online",
+  "free shipping",
+  "shipping",
+  "returns",
+  "wishlist",
+  "new arrivals",
+  "best sellers",
+  "limited stock",
+  "quantity",
+];
+
+const SERVICE_INTENT_SIGNALS = [
+  "get a quote",
+  "request a quote",
+  "quote",
+  "estimate",
+  "call now",
+  "call us",
+  "contact us",
+  "whatsapp",
+  "book consultation",
+  "book a consultation",
+  "book appointment",
+  "schedule a call",
+  "free consultation",
+  "service area",
+  "site visit",
+  "contractor",
+  "construction",
+  "building",
+  "solar",
+  "cctv",
+  "security",
+  "dentist",
+  "attorney",
+  "accountant",
+];
+
+function keywordHitCount(corpus: string, keywords: string[]): number {
+  return keywords.reduce((sum, keyword) => {
+    return sum + (corpus.includes(keyword.toLowerCase()) ? 1 : 0);
+  }, 0);
+}
+
+function ctaStrength(cta: string): number {
+  const lower = cta.toLowerCase();
+  if (/\b(add to cart|checkout|buy now|shop now)\b/.test(lower)) return 100;
+  if (/\b(get|request)\s+(a\s+)?quote\b|\bbook\b|\bschedule\b|\bconsultation\b/.test(lower)) return 96;
+  if (/\b(call now|call us|whatsapp|talk to us|speak to)\b/.test(lower)) return 82;
+  if (/\b(contact us|contact|get in touch|send message)\b/.test(lower)) return 42;
+  if (/\b(learn more|read more|view|explore)\b/.test(lower)) return 20;
+  return 0;
+}
+
+function ecommerceIntentScore(corpus: string, ctaCorpus: string): number {
+  return (
+    keywordHitCount(corpus, ECOMMERCE_INTENT_SIGNALS) +
+    keywordHitCount(ctaCorpus, ["add to cart", "checkout", "buy now", "shop now"]) * 2
+  );
+}
+
+function serviceIntentScore(
+  scraped: ScrapedWebsiteData,
+  corpus: string,
+  ctaCorpus: string,
+): number {
+  return (
+    keywordHitCount(corpus, SERVICE_INTENT_SIGNALS) +
+    keywordHitCount(ctaCorpus, ["quote", "book", "consultation", "appointment", "call", "contact"]) +
+    Math.min(scraped.contactSignals.length, 2)
+  );
+}
+
+function strongestServiceNiche(scores: Record<SiteNiche, number>): SiteNiche {
+  return SERVICE_NICHES.reduce((best, niche) =>
+    scores[niche] > scores[best] ? niche : best,
+  );
 }
 
 function nicheLabelFromType(niche: SiteNiche): string {
@@ -403,7 +618,7 @@ export function extractSourceAnchors(scraped: ScrapedWebsiteData): string[] {
     if (!normalized || normalized.includes("no ") || normalized.length < 4) {
       continue;
     }
-    anchors.add(normalized.slice(0, 80));
+    anchors.add(truncateAtWord(normalized, 80));
   }
 
   return [...anchors].slice(0, 8);

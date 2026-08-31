@@ -208,8 +208,27 @@ function decodeEntities(input: string): string {
       .replace(/&lt;/gi, "<")
       .replace(/&gt;/gi, ">")
       .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'"),
+      .replace(/&apos;/gi, "'")
+      .replace(/&#39;/gi, "'")
+      .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) =>
+        entityFromCodePoint(match, Number.parseInt(hex, 16)),
+      )
+      .replace(/&#(\d+);/g, (match, decimal: string) =>
+        entityFromCodePoint(match, Number.parseInt(decimal, 10)),
+      ),
   );
+}
+
+function entityFromCodePoint(fallback: string, codePoint: number): string {
+  if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
+    return fallback;
+  }
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return fallback;
+  }
 }
 
 function extractTagContent(html: string, tagName: string): string[] {

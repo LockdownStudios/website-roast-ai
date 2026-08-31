@@ -242,6 +242,7 @@ export type BenchmarkCase = {
   scraped: ScrapedWebsiteData;
   expectedScoreRange: [number, number];
   mustFlag: Array<keyof ScoreBreakdown>;
+  mustPenalty?: string[];
 };
 
 export type BenchmarkCaseResult = {
@@ -254,6 +255,7 @@ export type BenchmarkCaseResult = {
   repeatabilityPass: boolean;
   flaggedWeaknesses: Array<keyof ScoreBreakdown>;
   missingExpectedFlags: Array<keyof ScoreBreakdown>;
+  missingExpectedPenalties?: string[];
   sampleLeak: string;
 };
 

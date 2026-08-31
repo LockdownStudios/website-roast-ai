@@ -28,6 +28,7 @@ function evaluateCase(testCase: BenchmarkCase): BenchmarkCaseResult {
   >)
     .filter((entry) => categoryRatio(entry[0], entry[1]) <= 0.45)
     .map((entry) => entry[0]);
+  const penaltyLabels = scoring.penalties.map((penalty) => penalty.label);
 
   return {
     id: testCase.id,
@@ -39,6 +40,9 @@ function evaluateCase(testCase: BenchmarkCase): BenchmarkCaseResult {
     repeatabilityPass: isRepeatable(testCase),
     flaggedWeaknesses,
     missingExpectedFlags: testCase.mustFlag.filter((flag) => !flaggedWeaknesses.includes(flag)),
+    missingExpectedPenalties: (testCase.mustPenalty ?? []).filter(
+      (penalty) => !penaltyLabels.includes(penalty),
+    ),
     sampleLeak: roast.single_biggest_leak,
   };
 }
@@ -84,10 +88,12 @@ export function runBenchmarkSuite(): BenchmarkRun & {
   const scorePassCount = results.filter((item) => item.scorePass).length;
   const repeatabilityPassCount = results.filter((item) => item.repeatabilityPass).length;
   const missingFlags = results.flatMap((item) => item.missingExpectedFlags);
+  const missingPenalties = results.flatMap((item) => item.missingExpectedPenalties ?? []);
   const overallPass =
     scorePassCount === totalCases &&
     repeatabilityPassCount === totalCases &&
-    missingFlags.length === 0;
+    missingFlags.length === 0 &&
+    missingPenalties.length === 0;
 
   const sortedScores = [...results].map((item) => item.score).sort((a, b) => a - b);
   const medianIndex = Math.floor(sortedScores.length / 2);
@@ -101,7 +107,13 @@ export function runBenchmarkSuite(): BenchmarkRun & {
     ) / 10;
 
   const failingCases = results
-    .filter((item) => !item.scorePass || !item.repeatabilityPass || item.missingExpectedFlags.length > 0)
+    .filter(
+      (item) =>
+        !item.scorePass ||
+        !item.repeatabilityPass ||
+        item.missingExpectedFlags.length > 0 ||
+        (item.missingExpectedPenalties ?? []).length > 0,
+    )
     .map((item) => item.id);
 
   return {

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ScrapedWebsiteData } from "./types";
 
-export const ROAST_ENGINE_VERSION = "v16-varied-site-specific-roasts";
+export const ROAST_ENGINE_VERSION = "v17-service-goal-report-polish";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();

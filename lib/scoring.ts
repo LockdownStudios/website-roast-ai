@@ -53,6 +53,9 @@ const OUTCOME_WORDS = [
 ];
 
 const LEGAL_TRUST_WORDS = ["privacy", "terms", "policy", "refund", "secure"];
+
+type CtaGoal = "commerce" | "quote" | "booking" | "consultation" | "download" | "demo";
+
 function classifyCtaSignal(signal: string): "strong" | "weak" | "none" {
   const lower = signal.toLowerCase();
 
@@ -73,6 +76,106 @@ function classifyCtaSignal(signal: string): "strong" | "weak" | "none" {
   }
 
   return "none";
+}
+
+function wordCount(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function headlineTooLong(headline: string): boolean {
+  const cleaned = headline.replace(/\s+/g, " ").trim();
+  return cleaned.length > 105 || wordCount(cleaned) > 16;
+}
+
+function keywordStuffedHeadline(headline: string): boolean {
+  const cleaned = headline.replace(/\s+/g, " ").trim().toLowerCase();
+  const words = cleaned
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 5);
+  const repeatedTerms = words.length - new Set(words).size;
+  const localModifierCount = (
+    cleaned.match(/\b(pretoria|centurion|tshwane|north|east|south|west|near me|residential|commercial|industrial)\b/g) ??
+    []
+  ).length;
+
+  return (
+    headlineTooLong(cleaned) &&
+    (repeatedTerms >= 2 || localModifierCount >= 3 || /[,;:]/.test(cleaned))
+  );
+}
+
+function pageHasOverloadedHeadline(scrapedData: ScrapedWebsiteData): boolean {
+  return scrapedData.headings.h1.some(headlineTooLong);
+}
+
+function pageHasKeywordStuffedHeadline(scrapedData: ScrapedWebsiteData): boolean {
+  return scrapedData.headings.h1.some(keywordStuffedHeadline);
+}
+
+function expectedCtaGoal(niche: string): CtaGoal | null {
+  switch (niche) {
+    case "ecommerce":
+      return "commerce";
+    case "local_service":
+      return "quote";
+    case "professional_service":
+      return "consultation";
+    case "healthcare":
+      return "booking";
+    case "mobile_game":
+      return "download";
+    case "saas":
+      return "demo";
+    default:
+      return null;
+  }
+}
+
+function expectedCtaLabel(niche: string): string {
+  switch (niche) {
+    case "local_service":
+      return "Request a Quote";
+    case "professional_service":
+      return "Book a Consultation";
+    case "healthcare":
+      return "Book an Appointment";
+    case "creative_agency":
+      return "Book a Discovery Call";
+    case "mobile_game":
+      return "Download the App";
+    case "saas":
+      return "Book a Demo";
+    case "ecommerce":
+      return "Shop Now";
+    default:
+      return "Book a Consultation";
+  }
+}
+
+function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
+  const lower = signal.toLowerCase();
+  switch (goal) {
+    case "commerce":
+      return /\b(add to cart|checkout|buy now|shop now|shop|order now)\b/.test(lower);
+    case "quote":
+      return /\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(lower);
+    case "booking":
+      return /\b(book|schedule)\b.*\b(appointment|visit|call|consultation)\b|\bbook now\b|\bcall now\b/.test(lower);
+    case "consultation":
+      return /\b(book|schedule)\b.*\b(consultation|call|discovery|conversation)\b|\bfree consultation\b/.test(lower);
+    case "download":
+      return /\b(download|install|play now|get the app|app store|google play)\b/.test(lower);
+    case "demo":
+      return /\b(book|request)\b.*\bdemo\b|\bstart free trial\b|\bstart trial\b|\bsign up\b/.test(lower);
+    default:
+      return false;
+  }
+}
+
+function hasGoalLedCta(ctas: string[], niche: string): boolean {
+  const goal = expectedCtaGoal(niche);
+  return Boolean(goal && ctas.some((cta) => ctaMatchesGoal(cta, goal)));
 }
 
 function hasAny(text: string, words: string[]): boolean {
@@ -335,6 +438,14 @@ function leakFromWeakestCategory(
     return "Visitors can read your page and still not know what to do next.";
   }
 
+  if (penaltyLabels.has("Keyword-Stuffed Headline")) {
+    return "Your homepage is ranking for phrases instead of persuading people.";
+  }
+
+  if (penaltyLabels.has("Mismatched CTA Goal")) {
+    return "The page asks for the wrong next step, so buyer intent cools down.";
+  }
+
   if (penaltyLabels.has("No Trust Proof") && penaltyLabels.has("No Contact Path")) {
     return "You ask people to trust you, but you give them nothing to believe.";
   }
@@ -422,6 +533,9 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   const legalCue = hasAny(combinedLower, LEGAL_TRUST_WORDS);
   const uniqueLongTerms = countUniqueLongTerms(scrapedData.content);
   const siteContext = buildSiteContextSnapshot(scrapedData);
+  const overloadedHeadline = pageHasOverloadedHeadline(scrapedData);
+  const stuffedHeadline = pageHasKeywordStuffedHeadline(scrapedData);
+  const headlineWorksForClarity = meaningfulH1 && !overloadedHeadline && !stuffedHeadline;
 
   const trustSignalCount = scrapedData.trustSignals.length;
   const contactSignalCount = scrapedData.contactSignals.length;
@@ -433,13 +547,17 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   ).length;
   const ctaCount = strongCtaCount + weakCtaCount;
   const genericCount = scrapedData.genericPhrasesFound.length;
+  const ctaGoalMismatch =
+    Boolean(expectedCtaGoal(siteContext.niche)) &&
+    !hasGoalLedCta(scrapedData.ctas, siteContext.niche) &&
+    (weakCtaCount > 0 || strongCtaCount === 0);
 
   const clarity = scoreClarity({
     titleExists,
     titleLengthGood,
     titleSpecific: titleLengthGood && (hasServiceKeywords || headlineOutcomeHit || /\d/.test(titleText)),
     hasH1,
-    meaningfulH1,
+    meaningfulH1: headlineWorksForClarity,
     contentLength,
     hasServiceKeywords,
     headlineOutcomeHit,
@@ -466,7 +584,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     numericProof,
     headlineOutcomeHit,
     hasServiceKeywords,
-    meaningfulH1,
+    meaningfulH1: headlineWorksForClarity,
     uniqueLongTerms,
     genericCount,
   });
@@ -501,6 +619,22 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     );
   }
 
+  if (stuffedHeadline) {
+    addAdjustment(
+      penalties,
+      "Keyword-Stuffed Headline",
+      7,
+      "The primary headline is overloaded with service and location terms instead of a clear buyer promise.",
+    );
+  } else if (overloadedHeadline) {
+    addAdjustment(
+      penalties,
+      "Overloaded Hero Headline",
+      5,
+      "The primary headline is too long for quick buyer comprehension.",
+    );
+  }
+
   if (
     ctaCount === 0 &&
     !scrapedData.visualHints.aboveFoldCtaLikely &&
@@ -518,6 +652,15 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
       "Weak CTA Path",
       3,
       "CTA exists but is soft; next action is not compelling enough.",
+    );
+  }
+
+  if (ctaGoalMismatch) {
+    addAdjustment(
+      penalties,
+      "Mismatched CTA Goal",
+      6,
+      `The CTA path is too generic for ${siteContext.nicheLabel.toLowerCase()} traffic; the page should drive "${expectedCtaLabel(siteContext.niche)}".`,
     );
   }
 
@@ -624,7 +767,14 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     bonuses.reduce((sum, item) => sum + item.points, 0),
   );
   const baseRaw = sumBreakdown(breakdown);
-  const rawScore = roundToOne(clampToRange(baseRaw - penaltyTotal + bonusTotal, 0, 100));
+  const preliminaryRaw = clampToRange(baseRaw - penaltyTotal + bonusTotal, 0, 100);
+  const rawCaps: number[] = [];
+  if (stuffedHeadline && ctaGoalMismatch) rawCaps.push(60);
+  else if (stuffedHeadline) rawCaps.push(68);
+  if (ctaGoalMismatch && trustSignalCount <= 1) rawCaps.push(66);
+  if (ctaGoalMismatch && strongCtaCount === 0) rawCaps.push(68);
+  const cappedRaw = rawCaps.length > 0 ? Math.min(preliminaryRaw, ...rawCaps) : preliminaryRaw;
+  const rawScore = roundToOne(clampToRange(cappedRaw, 0, 100));
   const score = scoreOutOf10FromRaw(rawScore);
 
   const confidence = computeConfidence({
@@ -645,7 +795,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   const findings = toFindings(
     {
       titleExists,
-      meaningfulH1,
+      meaningfulH1: headlineWorksForClarity,
       contentLength,
       trustSignalCount,
       contactSignalCount,

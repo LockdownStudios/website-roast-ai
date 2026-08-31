@@ -5,7 +5,7 @@ import {
   roundToOne,
 } from "./scoringConfig";
 import { buildImplementationBlueprint, toQuickFixLines } from "./implementationGuide";
-import { buildSiteContextSnapshot, extractSourceAnchors } from "./siteContext";
+import { buildSiteContextSnapshot, extractSourceAnchors, type SiteNiche } from "./siteContext";
 import type {
   RoastClaim,
   RoastClaimSeverity,
@@ -41,6 +41,8 @@ Rules:
 - Do not refer to localhost, 127.0.0.1, or development hostnames as the business name. Say "this page" instead.
 - Never quote internal labels like "No trust proof detected", "No contact path detected", or "No strong CTA detected". Translate them into human business language.
 - Output a claim contract that maps key claims to concrete evidence snippets
+- Never recommend "Shop Now" unless the detected niche is Ecommerce and the evidence includes real shopping/cart/checkout intent
+- For local service, professional service, healthcare, and agency sites, recommend quote, booking, consultation, call, or appointment actions
 
 Return valid JSON only.`;
 
@@ -108,6 +110,10 @@ const ROAST_EDGE_TERMS = [
   "generic",
   "invisible",
   "weak",
+  "wrong",
+  "stuffed",
+  "overloaded",
+  "bloated",
   "flat",
   "confusing",
   "brochure",
@@ -295,7 +301,8 @@ function humanSignal(value: string): string {
     .replace(/\bNo CTA text detected\b/gi, "no clear CTA text")
     .replace(/\bNo H1 detected\b/gi, "no visible primary headline")
     .replace(/\bNo H2s detected\b/gi, "no visible section headlines")
-    .replace(/\bNo generic phrase flags detected\b/gi, "no obvious generic phrase flags");
+    .replace(/\bNo generic phrase flags detected\b/gi, "no obvious generic phrase flags")
+    .replace(/\bNo obvious generic phrase flags\b/gi, "no obvious generic phrase flags");
 }
 
 function quoted(value: string | undefined, fallback: string): string {
@@ -306,6 +313,33 @@ function quoted(value: string | undefined, fallback: string): string {
 
   const human = humanSignal(cleaned);
   return human !== cleaned ? human : `"${human.slice(0, 180)}"`;
+}
+
+function alignGoalLanguage(
+  value: string,
+  niche: SiteNiche,
+  nicheLabel: string,
+  primaryCta: string,
+): string {
+  if (niche === "ecommerce") {
+    return value;
+  }
+
+  return value
+    .replace(/\b"Shop Now"\b/gi, `"${primaryCta}"`)
+    .replace(/\bShop Now\b/gi, primaryCta)
+    .replace(/\becommerce traffic\b/gi, `${nicheLabel.toLowerCase()} traffic`)
+    .replace(/\bhigh-intent shoppers\b/gi, "high-intent buyers")
+    .replace(/\bshoppers\b/gi, "buyers")
+    .replace(/\bshopping\b/gi, "buying");
+}
+
+function genericEvidenceLine(context: ReturnType<typeof buildSiteContextSnapshot>): string {
+  if (/^no obvious generic phrase flags$/i.test(context.genericCopySummary)) {
+    return `thin ${context.nicheLabel.toLowerCase()} differentiation`;
+  }
+
+  return quoted(context.genericCopySummary, "generic copy");
 }
 
 function formatEvidenceList(items: string[], emptyLabel: string, limit = 5): string {
@@ -489,6 +523,7 @@ Output constraints:
 - quick_fixes must be immediately actionable and implementation-ready
 - each quick_fix should follow this structure: "Where: ... | Fix: ... | Example: ..."
 - If the detected CTA is weak or mismatched for the site goal, do not recommend standardizing it. Recommend the goal-led CTA from the site context instead.
+- Do not recommend "Shop Now" unless the niche is Ecommerce and the evidence shows cart, checkout, buying, or shopping signals. Service businesses need quote/book/call/consultation actions.
 - For mobile games or app pages, the primary CTA should usually drive install/download/play intent, not contact intent.
 - Use exact site details (headline/CTA/trust/contact/visual findings). If details are missing, say they are missing and roast that absence.
 - Include at least 5 sharp roast lines across first_impression, single_biggest_leak, lost_customers, and mistakes
@@ -852,7 +887,7 @@ function anchoredRoastHook(
   const cta = quoted(context.primaryCta, "your missing CTA");
   const trust = quoted(context.topTrustSignal, "no trust proof");
   const contact = quoted(context.contactPathSummary, "no contact path");
-  const generic = quoted(context.genericCopySummary, "generic copy");
+  const generic = genericEvidenceLine(context);
   const host = hostLabel(scrapedData);
 
   if (sellsWebsiteJudgment(scrapedData) && isWeakCategory(scoringData, "trust", 0.45)) {
@@ -934,9 +969,50 @@ function buildBiggestLeak(
   const cta = quoted(context.primaryCta, "missing CTA");
   const trust = quoted(context.topTrustSignal, "no trust proof");
   const contact = quoted(context.contactPathSummary, "no contact path");
-  const generic = quoted(context.genericCopySummary, "no generic phrase flags");
+  const generic = genericEvidenceLine(context);
   const visual = visualEvidenceLine(scrapedData);
   const host = hostLabel(scrapedData);
+  const blueprint = buildImplementationBlueprint(scrapedData, scoringData);
+  const penaltyLabels = new Set(scoringData.penalties.map((penalty) => penalty.label));
+
+  if (penaltyLabels.has("Keyword-Stuffed Headline") && penaltyLabels.has("Mismatched CTA Goal")) {
+    return pickVariant(
+      [
+        `${offer} is built like an SEO net, not a buyer promise. Then ${cta} asks for a vague next step when the page should drive "${blueprint.primaryCta}", so high-intent visitors get keywords before confidence.`,
+        `${host} leaks intent in two places: the headline is overloaded, and ${cta} does not match the buyer's real job. The page should make "${blueprint.primaryCta}" feel obvious.`,
+        `The biggest leak is the headline-to-action handoff. ${offer} makes buyers wade through search terms, then ${cta} fails to turn that interest into "${blueprint.primaryCta}".`,
+      ],
+      scrapedData,
+      scoringData,
+      "leak-headline-cta",
+    );
+  }
+
+  if (penaltyLabels.has("Keyword-Stuffed Headline")) {
+    return pickVariant(
+      [
+        `${offer} is the leak. It reads like a ranking attempt before it reads like a clear buyer promise, so the page spends its first screen making people decode the offer.`,
+        `${host} is losing people at the headline. ${offer} has too many keywords and not enough buyer payoff.`,
+        `The homepage is trying to satisfy a search engine before it persuades a human. ${offer} needs a shorter promise with a clearer outcome.`,
+      ],
+      scrapedData,
+      scoringData,
+      "leak-headline",
+    );
+  }
+
+  if (penaltyLabels.has("Mismatched CTA Goal")) {
+    return pickVariant(
+      [
+        `${cta} is the leak. For ${context.nicheLabel.toLowerCase()} buyers, the page should drive "${blueprint.primaryCta}" instead of letting intent cool into a vague contact path.`,
+        `${host} gets the action wrong. ${cta} is too generic for the decision this page needs, so visitors are not pushed toward "${blueprint.primaryCta}".`,
+        `The page loses money at the next step: ${cta} does not match the buyer's goal, while "${blueprint.primaryCta}" would make the action concrete.`,
+      ],
+      scrapedData,
+      scoringData,
+      "leak-cta-mismatch",
+    );
+  }
 
   switch (weakestCategory(scoringData)) {
     case "clarity":
@@ -1031,7 +1107,7 @@ function fallbackRoastMistakes(
   const cta = quoted(context.primaryCta, "missing CTA");
   const trust = quoted(context.topTrustSignal, "no trust proof");
   const contact = quoted(context.contactPathSummary, "no contact path");
-  const generic = quoted(context.genericCopySummary, "generic copy");
+  const generic = genericEvidenceLine(context);
   const mistakes: string[] = [];
 
   if (isWeakCategory(scoringData, "clarity", 0.45)) {
@@ -1154,6 +1230,8 @@ function enforceRoastIntensity(
 ): Omit<RoastResultPayload, "score" | "score_label"> {
   const context = buildSiteContextSnapshot(scrapedData);
   const blueprint = buildImplementationBlueprint(scrapedData, scoringData);
+  const align = (value: string) =>
+    alignGoalLanguage(value, context.niche, context.nicheLabel, blueprint.primaryCta);
   const roastHook = anchoredRoastHook(scrapedData, scoringData);
   const harshLeak = buildBiggestLeak(scrapedData, scoringData);
 
@@ -1210,13 +1288,13 @@ function enforceRoastIntensity(
 
   return {
     ...candidate,
-    first_impression: firstImpression,
-    single_biggest_leak: singleBiggestLeak,
-    mistakes: uniqueNarrativeLines(roastedMistakes, 5),
-    lost_customers: lostCustomers,
-    quick_fixes: uniqueNarrativeLines(candidate.quick_fixes, 5),
-    high_impact: highImpact,
-    tone_summary: toneSummary,
+    first_impression: align(firstImpression),
+    single_biggest_leak: align(singleBiggestLeak),
+    mistakes: uniqueNarrativeLines(roastedMistakes.map(align), 5),
+    lost_customers: align(lostCustomers),
+    quick_fixes: uniqueNarrativeLines(candidate.quick_fixes.map(align), 5),
+    high_impact: align(highImpact),
+    tone_summary: align(toneSummary),
   };
 }
 
@@ -1236,6 +1314,8 @@ function buildFirstImpression(
   const quotedCta = quoted(cta, "missing CTA");
   const trust = quoted(context.topTrustSignal, "no trust proof");
   const contact = quoted(context.contactPathSummary, "no contact path");
+  const blueprint = buildImplementationBlueprint(scrapedData, scoringData);
+  const penaltyLabels = new Set(scoringData.penalties.map((penalty) => penalty.label));
 
   if (scoringData.confidence <= 45 || scrapedData.contentSnippet.length < 180) {
     return pickVariant(
@@ -1247,6 +1327,45 @@ function buildFirstImpression(
       scrapedData,
       scoringData,
       "first-thin",
+    );
+  }
+
+  if (penaltyLabels.has("Keyword-Stuffed Headline") && penaltyLabels.has("Mismatched CTA Goal")) {
+    return pickVariant(
+      [
+        `${quotedOffer} is trying to win Google and making the buyer pay the reading bill. Then ${quotedCta} asks for the wrong next step; this page should drive "${blueprint.primaryCta}".`,
+        `${host} opens with a keyword pile, not a sales promise. ${quotedOffer} needs a cleaner buyer outcome, and ${quotedCta} needs to become "${blueprint.primaryCta}".`,
+        `The first impression is SEO anxiety wearing a sales badge: ${quotedOffer}. The page needs a shorter promise and one hard action: "${blueprint.primaryCta}".`,
+      ],
+      scrapedData,
+      scoringData,
+      "first-headline-cta",
+    );
+  }
+
+  if (penaltyLabels.has("Keyword-Stuffed Headline")) {
+    return pickVariant(
+      [
+        `${quotedOffer} is too bloated to sell quickly. The buyer lands on a phrase pile when they need a clean reason to choose the business.`,
+        `${host} makes the headline carry every keyword at once. ${quotedOffer} reads busy before it reads persuasive.`,
+        `The first impression is a headline trying to be a service-area map. ${quotedOffer} needs one buyer promise, not every location and service stuffed into one breath.`,
+      ],
+      scrapedData,
+      scoringData,
+      "first-headline",
+    );
+  }
+
+  if (penaltyLabels.has("Mismatched CTA Goal")) {
+    return pickVariant(
+      [
+        `${quotedCta} is too soft for the job. After ${quotedOffer}, the page should push "${blueprint.primaryCta}" before buyer intent cools off.`,
+        `${host} gets close, then fumbles the ask. ${quotedCta} is not as clear or valuable as "${blueprint.primaryCta}" for this buyer.`,
+        `${quotedCta} makes the first screen feel passive. A serious ${context.nicheLabel.toLowerCase()} page needs one concrete action: "${blueprint.primaryCta}".`,
+      ],
+      scrapedData,
+      scoringData,
+      "first-cta-mismatch",
     );
   }
 
@@ -1402,12 +1521,13 @@ function fallbackMistakes(
   }
 
   if (isWeakCategory(scoringData, "differentiation")) {
+    const generic = genericEvidenceLine(context);
     mistakes.push(
       pickVariant(
         [
-          `Positioning is generic for ${context.nicheLabel.toLowerCase()} traffic. Snapshot: ${context.genericCopySummary}. The copy needs a sharper point of view.`,
-          `${context.genericCopySummary} makes the page sound too easy to replace. Buyers need a reason to choose this offer specifically.`,
-          `The differentiation is too soft. ${context.genericCopySummary} makes the message feel category-standard instead of choice-worthy.`,
+          `Positioning is generic for ${context.nicheLabel.toLowerCase()} traffic. Snapshot: ${generic}. The copy needs a sharper point of view.`,
+          `${generic} makes the page sound too easy to replace. Buyers need a reason to choose this offer specifically.`,
+          `The differentiation is too soft. ${generic} makes the message feel category-standard instead of choice-worthy.`,
         ],
         scrapedData,
         scoringData,

@@ -116,6 +116,8 @@ function drawCover(
   const subject = reportSubject(report.url, report.scraped);
   const firstImpression = cleanReportText(report.roast.first_impression, subject);
   const firstMistake = cleanList(report.roast.mistakes, subject, 1)[0] || report.roast.single_biggest_leak;
+  const blueprint = buildImplementationBlueprint(report.scraped, report.scoring);
+  const topLeak = cleanReportText(report.roast.single_biggest_leak || firstMistake, subject);
 
   doc.rect(0, 0, width, height).fill(ROAST_BLACK);
   doc.rect(0, 0, width, 170).fill(ROAST_SURFACE);
@@ -142,21 +144,21 @@ function drawCover(
     .font("Helvetica-Bold")
     .fontSize(10)
     .fillColor(ROAST_ACCENT_SOFT)
-    .text("ROAST REPORT", 48, 196, { characterSpacing: 1.4 });
+    .text("ROAST REPORT", 48, 188, { characterSpacing: 1.4 });
   doc
     .font("Helvetica-Bold")
-    .fontSize(subject.length > 34 ? 38 : 44)
+    .fontSize(subject.length > 34 ? 34 : 40)
     .fillColor(ROAST_TEXT)
-    .text(subject, 48, 220, { width: width - 96, lineGap: 2 });
+    .text(subject, 48, 212, { width: width - 96, lineGap: 2 });
 
-  drawScoreBadge(doc, width - 182, 390, report.roast.score, report.roast.score_label);
+  drawScoreBadge(doc, width - 182, 322, report.roast.score, report.roast.score_label);
 
   const details = [
     visibleUrl(report.url),
     `Generated ${formatDate(report.createdAt)}`,
     options.isUnlocked ? "Full report unlocked" : `Preview only - unlock for R${options.access.priceZar}`,
   ];
-  let y = 420;
+  let y = 326;
   details.forEach((detail) => {
     doc.roundedRect(48, y, width - 260, 30, 6).fillAndStroke(ROAST_BG, ROAST_LINE);
     doc
@@ -167,9 +169,9 @@ function drawCover(
     y += 42;
   });
 
-  const briefY = 562;
-  doc.roundedRect(48, briefY, width - 96, 126, 8).fillAndStroke(ROAST_SURFACE, ROAST_LINE);
-  doc.rect(48, briefY, 7, 126).fill(ROAST_ACCENT);
+  const briefY = 476;
+  doc.roundedRect(48, briefY, width - 96, 194, 8).fillAndStroke(ROAST_SURFACE, ROAST_LINE);
+  doc.rect(48, briefY, 7, 194).fill(ROAST_ACCENT);
   doc
     .font("Helvetica-Bold")
     .fontSize(10)
@@ -177,7 +179,7 @@ function drawCover(
     .text("QUICK READ", 66, briefY + 16, { characterSpacing: 0.8 });
   doc.font("Helvetica").fontSize(10.5).fillColor(ROAST_TEXT).text(firstImpression, 66, briefY + 36, {
     width: width - 132,
-    height: 42,
+    height: 50,
     ellipsis: true,
     lineGap: 3,
   });
@@ -185,10 +187,21 @@ function drawCover(
     .font("Helvetica-Bold")
     .fontSize(9)
     .fillColor(ROAST_MUTED)
-    .text("TOP LEAK", 66, briefY + 86, { characterSpacing: 0.8 });
-  doc.font("Helvetica").fontSize(10).fillColor(ROAST_TEXT).text(cleanText(firstMistake), 126, briefY + 84, {
-    width: width - 174,
-    height: 30,
+    .text("TOP LEAK", 66, briefY + 98, { characterSpacing: 0.8 });
+  doc.font("Helvetica").fontSize(10).fillColor(ROAST_TEXT).text(cleanText(topLeak || firstMistake), 132, briefY + 95, {
+    width: width - 180,
+    height: 42,
+    ellipsis: true,
+    lineGap: 2,
+  });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(9)
+    .fillColor(ROAST_MUTED)
+    .text("NEXT ACTION", 66, briefY + 150, { characterSpacing: 0.8 });
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(ROAST_ACCENT_SOFT).text(blueprint.primaryCta, 152, briefY + 147, {
+    width: width - 200,
+    height: 22,
     ellipsis: true,
   });
 
@@ -465,12 +478,12 @@ function contentWidth(doc: PDFKit.PDFDocument) {
 function reportSubject(url: string, scraped?: ScrapedWebsiteData): string {
   const title = scraped?.title?.trim();
   if (title && title !== "No title found.") {
-    return cleanText(title.replace(/\s+[|-]\s+.*$/, "").slice(0, 64));
+    return truncateAtWord(cleanText(title.replace(/(?:\s+[|-]\s+|:\s+).*$/, "")), 64);
   }
 
   const h1 = scraped?.headings.h1[0]?.trim();
   if (h1) {
-    return cleanText(h1.slice(0, 64));
+    return truncateAtWord(cleanText(h1), 64);
   }
 
   try {
@@ -511,10 +524,11 @@ function formatPriorityLine(value: string): string {
 }
 
 function cleanReportText(value: string, subject: string): string {
-  return cleanText(value)
+  return cleanText(decodeHtmlEntities(value))
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\uFFFD/g, "")
     .replace(/\blocalhost(?::\d+)?\b/gi, subject)
     .replace(/\b127\.0\.0\.1(?::\d+)?\b/g, subject)
     .replace(/\b0\.0\.0\.0(?::\d+)?\b/g, subject)
@@ -524,6 +538,46 @@ function cleanReportText(value: string, subject: string): string {
 
 function cleanText(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function truncateAtWord(value: string, limit: number): string {
+  const cleaned = cleanText(decodeHtmlEntities(value));
+  if (cleaned.length <= limit) {
+    return cleaned;
+  }
+
+  const clipped = cleaned.slice(0, Math.max(0, limit - 3));
+  const wordSafe = clipped.replace(/\s+\S*$/, "").trim();
+  return `${(wordSafe.length >= limit * 0.65 ? wordSafe : clipped).trim()}...`;
+}
+
+function decodeHtmlEntities(value: string): string {
+  return String(value ?? "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) =>
+      entityFromCodePoint(match, Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (match, decimal: string) =>
+      entityFromCodePoint(match, Number.parseInt(decimal, 10)),
+    );
+}
+
+function entityFromCodePoint(fallback: string, codePoint: number): string {
+  if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
+    return fallback;
+  }
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return fallback;
+  }
 }
 
 function formatDate(value: string) {

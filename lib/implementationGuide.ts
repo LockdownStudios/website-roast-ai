@@ -94,22 +94,22 @@ const NICHE_DEFAULTS: Record<SiteNiche, NicheDefaults> = {
   local_service: {
     audience: "homeowners and local buyers",
     outcome: "get help fast with clear pricing",
-    fallbackCta: "Request A Quote",
+    fallbackCta: "Request a Quote",
   },
   professional_service: {
     audience: "buyers comparing expertise",
     outcome: "book a trusted first consultation",
-    fallbackCta: "Book A Consultation",
+    fallbackCta: "Book a Consultation",
   },
   healthcare: {
     audience: "patients seeking reliable care",
     outcome: "book the right appointment quickly",
-    fallbackCta: "Book An Appointment",
+    fallbackCta: "Book an Appointment",
   },
   creative_agency: {
     audience: "brands looking for growth assets",
     outcome: "launch stronger campaigns faster",
-    fallbackCta: "Book A Discovery Call",
+    fallbackCta: "Book a Discovery Call",
   },
   mobile_game: {
     audience: "mobile players",
@@ -179,11 +179,24 @@ function weakOrMismatchedCtaForNiche(
   const normalized = detectedCta.toLowerCase();
   const weakGeneric = /^(learn more|read more|more|contact|contact us|send message|message us|get in touch|submit)$/i.test(detectedCta);
 
-  if (niche === "mobile_game") {
-    return !/\b(download|install|play now|get the app|app store|google play)\b/.test(normalized);
+  switch (niche) {
+    case "ecommerce":
+      return !/\b(add to cart|checkout|buy now|shop now|shop|order now)\b/.test(normalized);
+    case "local_service":
+      return !/\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(normalized);
+    case "professional_service":
+      return !/\b(book|schedule)\b.*\b(consultation|call|conversation)\b|\bfree consultation\b/.test(normalized);
+    case "healthcare":
+      return !/\b(book|schedule)\b.*\b(appointment|visit|consultation|call)\b|\bbook now\b|\bcall now\b/.test(normalized);
+    case "creative_agency":
+      return !/\b(book|schedule)\b.*\b(discovery|call|consultation|brief)\b|\bfree consultation\b|\brequest\s+(a\s+)?quote\b/.test(normalized);
+    case "mobile_game":
+      return !/\b(download|install|play now|get the app|app store|google play)\b/.test(normalized);
+    case "saas":
+      return !/\b(book|request)\b.*\bdemo\b|\bstart free trial\b|\bstart trial\b|\bsign up\b/.test(normalized);
+    default:
+      return weakGeneric;
   }
-
-  return weakGeneric;
 }
 
 function ctaRecommendation(
@@ -206,6 +219,8 @@ function ctaRecommendation(
       reason:
         niche === "mobile_game"
           ? `"${detectedCta}" points at a conversation, but a mobile game page should push players to install or start playing`
+          : niche === "ecommerce"
+            ? `"${detectedCta}" is not a buying action for shoppers`
           : `"${detectedCta}" is too soft or generic for the page goal`,
     };
   }
@@ -276,6 +291,27 @@ function genericBeforeLine(context: GuideContext): string {
     return context.scraped.genericPhrasesFound.slice(0, 2).join(" | ");
   }
   return "Generic copy blurs differentiation.";
+}
+
+function headlineExampleForContext(context: GuideContext): string {
+  const offerName = shortOffer(context.offerLabel.replace(/[:|].*$/, ""), 38).replace(/[^a-zA-Z0-9\s-]/g, "");
+
+  switch (context.niche) {
+    case "local_service":
+      return `Reliable ${offerName || "local service"} with clear quotes and fast response`;
+    case "professional_service":
+      return `Trusted ${offerName || "professional guidance"} for buyers who need a clear first consultation`;
+    case "healthcare":
+      return `Book reliable care with a team that makes the next step simple`;
+    case "creative_agency":
+      return `Launch a sharper website with a clear plan, proof, and next step`;
+    case "ecommerce":
+      return `Shop the right product faster, with proof and fewer doubts`;
+    case "saas":
+      return `Book a demo and see the workflow improvement in one session`;
+    default:
+      return `${context.offerLabel} for ${context.audience} who want to ${context.outcome}`;
+  }
 }
 
 function inferImpactEffort(fix: FixBlueprintItem): {
@@ -432,6 +468,19 @@ function brutalTruthsFromPenalties(context: GuideContext): string[] {
 
   for (const penalty of penalties) {
     switch (penalty.label) {
+      case "Keyword-Stuffed Headline":
+      case "Overloaded Hero Headline":
+        truths.push(
+          `"${shortOffer(context.offerLabel, 72)}" reads like a search-engine grocery list before it reads like a buyer promise.`,
+        );
+        break;
+      case "Mismatched CTA Goal":
+        truths.push(
+          context.detectedPrimaryCta
+            ? `"${context.detectedPrimaryCta}" is the wrong action to amplify. The page should push "${context.primaryCta}" because ${context.primaryCtaReason}.`
+            : `The page does not make "${context.primaryCta}" obvious enough for ${context.nicheLabel.toLowerCase()} buyers.`,
+        );
+        break;
       case "No CTA Path":
       case "Weak CTA Path":
       case "Soft Visual CTA":
@@ -514,6 +563,35 @@ function fixFromPenalty(
   penalty: ScoreAdjustment,
 ): FixBlueprintItem | null {
   switch (penalty.label) {
+    case "Keyword-Stuffed Headline":
+    case "Overloaded Hero Headline":
+      return {
+        title: "Replace the keyword pile with a buyer promise",
+        where: "Hero H1, page title, and first supporting paragraph",
+        why:
+          `"${shortOffer(context.offerLabel, 72)}" reads like SEO stuffing before it reads like a reason to choose the business.`,
+        how: [
+          "Cut the headline to one buyer, one service category, and one outcome.",
+          "Move location/service variants into supporting copy or service-area blocks.",
+          `Place "${context.primaryCta}" directly under the rewritten promise.`,
+        ],
+        example: `Headline: "${headlineExampleForContext(context)}"`,
+      };
+    case "Mismatched CTA Goal":
+      return {
+        title: `Replace the soft action with "${context.primaryCta}"`,
+        where: "Primary nav, hero button, sticky mobile action, and final CTA",
+        why:
+          context.detectedPrimaryCta
+            ? `"${context.detectedPrimaryCta}" does not match what ${context.nicheLabel.toLowerCase()} buyers are ready to do.`
+            : `The page does not make the right ${context.nicheLabel.toLowerCase()} next step obvious.`,
+        how: [
+          `Use "${context.primaryCta}" as the main CTA label across the page.`,
+          "Keep softer actions like contact/about as secondary text links.",
+          "Add one reassurance line under the CTA so the action feels low-friction.",
+        ],
+        example: `Button: "${context.primaryCta}" | Microcopy: "Fast response within 1 business day."`,
+      };
     case "No CTA Path":
     case "Weak CTA Path":
     case "Soft Visual CTA":
