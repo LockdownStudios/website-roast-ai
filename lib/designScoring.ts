@@ -133,6 +133,16 @@ export function scoreVisualDesign(input: VisualDesignInput): VisualDesignAssessm
     score = Math.min(score, 5);
   }
 
+  const severeVisualFailure = visualSummary
+    ? metric(visualSummary.readability) < 35 ||
+      metric(visualSummary.hierarchy) < 35 ||
+      metric(visualSummary.consistency) < 35
+    : false;
+
+  if (structureScore >= 7 && input.overallScore >= 4 && !severeVisualFailure) {
+    score = Math.max(score, 3.1);
+  }
+
   if (!visualSummary) {
     score = Math.min(score, 6);
   }
