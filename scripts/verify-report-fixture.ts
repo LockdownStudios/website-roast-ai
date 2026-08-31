@@ -23,6 +23,10 @@ async function main() {
     throw new Error("Roast AI fixture is missing the visual design score.");
   }
 
+  if ((report.scraped.siteFacts?.pagesReviewed.length ?? 0) < 2) {
+    throw new Error("Roast AI fixture is missing multi-page review evidence.");
+  }
+
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputPath, pdf);
   console.log(`Generated ${path.relative(process.cwd(), outputPath)} (${pdf.length} bytes)`);

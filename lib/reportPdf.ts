@@ -85,6 +85,7 @@ function drawReportBody(
   drawSectionTitle(doc, "The Roast");
   drawParagraph(doc, cleanReportText(roast.first_impression, subject), 12, ROAST_TEXT);
   drawCallout(doc, "Single Biggest Leak", cleanReportText(roast.single_biggest_leak, subject));
+  drawPagesReviewed(doc, report, subject);
 
   drawBulletSection(
     doc,
@@ -95,10 +96,10 @@ function drawReportBody(
   if (options.isUnlocked) {
     drawSectionTitle(doc, "Score Snapshot", 82);
     drawScoreGrid(doc, scoring);
-    drawSectionTitle(doc, "Lost Customers");
+    drawSectionTitle(doc, "Lost Customers", 64);
     drawParagraph(doc, cleanReportText(roast.lost_customers, subject), 11, ROAST_TEXT);
     drawBulletSection(doc, "Priority Fixes", priorityFixes(report, subject));
-    drawSectionTitle(doc, "High Impact Improvement");
+    drawSectionTitle(doc, "High Impact Improvement", 64);
     drawParagraph(doc, cleanReportText(roast.high_impact, subject), 11, ROAST_TEXT);
     drawBlueprint(doc, report, subject);
   } else {
@@ -158,7 +159,7 @@ function drawCover(
   const details = [
     visibleUrl(report.url),
     `Generated ${formatDate(report.createdAt)}`,
-    options.isUnlocked ? "Full report unlocked" : `Preview only - unlock for R${options.access.priceZar}`,
+    `${options.isUnlocked ? "Full report unlocked" : `Preview only - unlock for R${options.access.priceZar}`} | Pages reviewed: ${report.scraped.crawl?.pageCount ?? 1}`,
   ];
   let y = 326;
   details.forEach((detail) => {
@@ -214,6 +215,21 @@ function drawCover(
     .text("A conversion-focused teardown built from public website signals.", 48, height - 84, {
       width: width - 96,
     });
+}
+
+function drawPagesReviewed(
+  doc: PDFKit.PDFDocument,
+  report: StoredRoastReport,
+  subject: string,
+) {
+  const pages = (report.scraped.siteFacts?.pagesReviewed ?? [])
+    .map((fact) => fact.value)
+    .filter(Boolean);
+  if (pages.length <= 1) {
+    return;
+  }
+
+  drawSubheadingBullets(doc, "Pages Reviewed", cleanList(pages, subject, 6));
 }
 
 function drawBlueprint(

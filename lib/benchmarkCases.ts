@@ -21,6 +21,8 @@ function buildScraped(partial: Partial<ScrapedWebsiteData>): ScrapedWebsiteData 
       linkCount: 0,
     },
     visualAudit: partial.visualAudit,
+    crawl: partial.crawl,
+    siteFacts: partial.siteFacts,
     contentLength: partial.contentLength ?? (partial.content ?? "").length,
     retryUsed: partial.retryUsed ?? false,
     usedRelaxedFallback: partial.usedRelaxedFallback ?? false,
@@ -182,6 +184,131 @@ export const benchmarkCases: BenchmarkCase[] = [
         ],
         evidence: [
           "Visual score summary -> CTA prominence 69/100, readability 87/100, hierarchy 90/100, consistency 80/100, motion distraction 21/100.",
+        ],
+      },
+    }),
+  },
+  {
+    id: "dated-construction-landscaping-services",
+    label: "Dated construction and landscaping service page",
+    expectedScoreRange: [5.0, 5.8],
+    expectedVisualDesignRange: [2.6, 3.2],
+    mustFlag: [],
+    mustPenalty: [
+      "Mismatched CTA Goal",
+      "Weak Visual CTA",
+      "Low Visual Readability",
+      "Distracting Motion",
+      "Visible Copy Quality Gap",
+    ],
+    scraped: buildScraped({
+      url: "https://elchomgroup.co.za/services/",
+      title: "Elchom Group | Premier Construction & Landscaping Services in Gauteng",
+      description:
+        "Elchom Group provides construction, demolition, landscaping, paving, irrigation, and plant hire services in Gauteng.",
+      headings: {
+        h1: ["Pleased to be of Service"],
+        h2: [
+          "Pleased to be of Service",
+          "Comprehensive Construction Services",
+          "Comprehensive Landscaping Services",
+          "Contact Us Today",
+        ],
+      },
+      content:
+        "Elchom Group has provided construction and landscaping services since 2015. The services page offers construction services, building services, demolition, rubble removal, site clearing, rock breaking, blasting, paving, landscaping, irrigation, instant lawns, tree felling, garden maintenance, plant hire and tipper trucker services in Gauteng and Johannesburg. The page asks visitors to call us but does not show project proof, client results, or strong quote-led next steps. The service copy includes phrasing like achieve the your landscaping goals and repeats quality service.",
+      contentLength: 1800,
+      ctas: ["call us", "contact us"],
+      trustSignals: ["since"],
+      contactSignals: ["Email: info@elchomgroup.co.za", "Phone: 083 555 0101"],
+      genericPhrasesFound: [],
+      visualHints: {
+        aboveFoldCtaLikely: true,
+        heroHeadingEarly: false,
+        formAboveFoldLikely: false,
+        trustTokenAboveFold: false,
+        buttonCount: 1,
+        linkCount: 42,
+      },
+      visualAudit: {
+        available: true,
+        sampledAt: "2026-08-31T12:25:00.000Z",
+        summary: {
+          ctaProminence: 19,
+          readability: 0,
+          hierarchy: 76,
+          consistency: 81,
+          motionDistraction: 69,
+        },
+        findings: [
+          "Primary CTA is visually weak across sampled desktop and mobile views.",
+          "Text readability is poor against its backgrounds.",
+        ],
+        evidence: [
+          "Visual score summary -> CTA prominence 19/100, readability 0/100, hierarchy 76/100, consistency 81/100, motion distraction 69/100.",
+        ],
+      },
+      crawl: {
+        strategy: "multi_page",
+        pageCount: 4,
+        visitedUrls: [
+          "https://elchomgroup.co.za/",
+          "https://elchomgroup.co.za/services/",
+          "https://elchomgroup.co.za/about/",
+          "https://elchomgroup.co.za/contact/",
+        ],
+        failedUrls: [],
+        pages: [
+          {
+            url: "https://elchomgroup.co.za/",
+            role: "home",
+            title: "Elchom Group | Premier Construction & Landscaping Services in Gauteng",
+            primaryHeading: "Welcome to Elchom Group",
+            contentSnippet: "Welcome to Elchom Group construction and landscaping services in Gauteng.",
+            contentLength: 900,
+            headingCount: 4,
+          },
+          {
+            url: "https://elchomgroup.co.za/services/",
+            role: "services",
+            title: "Elchom Group | Services",
+            primaryHeading: "Comprehensive Construction Services",
+            contentSnippet: "Construction, demolition, rubble removal, landscaping and paving services.",
+            contentLength: 1600,
+            headingCount: 7,
+          },
+        ],
+      },
+      siteFacts: {
+        companyName: "Elchom Group",
+        services: [
+          { value: "Construction", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: "Landscaping", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: "Paving", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+        ],
+        locations: [
+          { value: "Gauteng", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: "Johannesburg", sourceUrl: "https://elchomgroup.co.za/contact/", sourceRole: "contact" },
+        ],
+        contacts: [
+          { value: "Email: info@elchomgroup.co.za", sourceUrl: "https://elchomgroup.co.za/contact/", sourceRole: "contact" },
+          { value: "Phone: 083 555 0101", sourceUrl: "https://elchomgroup.co.za/contact/", sourceRole: "contact" },
+        ],
+        ctas: [
+          { value: "call us", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: "contact us", sourceUrl: "https://elchomgroup.co.za/contact/", sourceRole: "contact" },
+        ],
+        trustSignals: [
+          { value: "since", sourceUrl: "https://elchomgroup.co.za/", sourceRole: "home" },
+        ],
+        pagesReviewed: [
+          { value: "Home: Welcome to Elchom Group", sourceUrl: "https://elchomgroup.co.za/", sourceRole: "home" },
+          { value: "Services: Comprehensive Construction Services", sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: "Contact: Contact Us Today", sourceUrl: "https://elchomgroup.co.za/contact/", sourceRole: "contact" },
+        ],
+        copyIssues: [
+          { value: 'Grammar issue: "achieve the your"', sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
+          { value: 'Copy issue: "tipper trucker"', sourceUrl: "https://elchomgroup.co.za/services/", sourceRole: "services" },
         ],
       },
     }),

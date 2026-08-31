@@ -2,6 +2,8 @@ import type {
   RoastClaim,
   RoastResultPayload,
   ScrapedWebsiteData,
+  SiteFactEvidence,
+  SiteFacts,
   StoredRoastReport,
   VisualAudit,
   WebsiteScoring,
@@ -79,6 +81,41 @@ function cleanClaimContract(claims: RoastClaim[] | undefined) {
     );
 }
 
+function cleanFactList(facts: SiteFactEvidence[]): SiteFactEvidence[] {
+  return facts
+    .map((fact) => ({
+      ...fact,
+      value: cleanReportText(fact.value),
+      sourceUrl: fact.sourceUrl ? cleanReportText(fact.sourceUrl) : undefined,
+    }))
+    .filter(
+      (fact) =>
+        fact.value &&
+        !isInternalDiagnosticLine(fact.value) &&
+        (!fact.sourceUrl || !isInternalDiagnosticLine(fact.sourceUrl)),
+    );
+}
+
+function sanitizeSiteFacts(siteFacts: SiteFacts | undefined): SiteFacts | undefined {
+  if (!siteFacts) {
+    return undefined;
+  }
+
+  return {
+    ...siteFacts,
+    companyName: siteFacts.companyName
+      ? cleanReportText(siteFacts.companyName)
+      : undefined,
+    services: cleanFactList(siteFacts.services),
+    locations: cleanFactList(siteFacts.locations),
+    contacts: cleanFactList(siteFacts.contacts),
+    ctas: cleanFactList(siteFacts.ctas),
+    trustSignals: cleanFactList(siteFacts.trustSignals),
+    pagesReviewed: cleanFactList(siteFacts.pagesReviewed),
+    copyIssues: cleanFactList(siteFacts.copyIssues),
+  };
+}
+
 export function sanitizeVisualAudit(visualAudit: VisualAudit | undefined) {
   if (!visualAudit) {
     return undefined;
@@ -112,6 +149,7 @@ export function sanitizeScrapedWebsiteData(
     contactSignals: cleanLines(scraped.contactSignals),
     genericPhrasesFound: cleanLines(scraped.genericPhrasesFound),
     visualAudit: sanitizeVisualAudit(scraped.visualAudit),
+    siteFacts: sanitizeSiteFacts(scraped.siteFacts),
   };
 }
 

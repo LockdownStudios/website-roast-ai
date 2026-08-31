@@ -145,6 +145,8 @@ function toOfficePayload(input: {
     roast: withRoastAccess(input.report.roast, access),
     access,
     scrapeMeta: buildScrapeMeta(input.report.scraped, scoring),
+    siteFacts: input.report.scraped.siteFacts,
+    crawl: input.report.scraped.crawl,
   };
 }
 

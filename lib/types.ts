@@ -15,12 +15,17 @@ export type CrawlPageRole =
   | "about"
   | "services"
   | "pricing"
+  | "projects"
+  | "testimonials"
+  | "faq"
   | "other";
 
 export type CrawlPageSummary = {
   url: string;
   role: CrawlPageRole;
   title: string;
+  primaryHeading?: string;
+  contentSnippet?: string;
   contentLength: number;
   headingCount: number;
 };
@@ -77,6 +82,23 @@ export type VisualAudit = {
 
 export type ScrapeQuality = "high" | "medium" | "low";
 
+export type SiteFactEvidence = {
+  value: string;
+  sourceUrl?: string;
+  sourceRole?: CrawlPageRole;
+};
+
+export type SiteFacts = {
+  companyName?: string;
+  services: SiteFactEvidence[];
+  locations: SiteFactEvidence[];
+  contacts: SiteFactEvidence[];
+  ctas: SiteFactEvidence[];
+  trustSignals: SiteFactEvidence[];
+  pagesReviewed: SiteFactEvidence[];
+  copyIssues: SiteFactEvidence[];
+};
+
 export type ScrapedWebsiteData = {
   url: string;
   title: string;
@@ -94,6 +116,7 @@ export type ScrapedWebsiteData = {
   visualHints: VisualHints;
   visualAudit?: VisualAudit;
   crawl?: CrawlSummary;
+  siteFacts?: SiteFacts;
   contentLength: number;
   retryUsed: boolean;
   usedRelaxedFallback: boolean;

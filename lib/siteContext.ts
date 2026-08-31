@@ -1,4 +1,5 @@
 import type { ScrapedWebsiteData } from "./types";
+import { siteFactValues } from "./siteFacts";
 
 export type SiteNiche =
   | "saas"
@@ -14,6 +15,11 @@ export type SiteNiche =
 export type SiteContextSnapshot = {
   niche: SiteNiche;
   nicheLabel: string;
+  companyName?: string;
+  services: string[];
+  locations: string[];
+  pagesReviewed: string[];
+  copyIssues: string[];
   offerHeadline: string;
   primaryCta: string;
   topTrustSignal: string;
@@ -594,6 +600,11 @@ export function buildSiteContextSnapshot(
   return {
     niche,
     nicheLabel: nicheLabelFromType(niche),
+    companyName: scraped.siteFacts?.companyName,
+    services: siteFactValues(scraped.siteFacts?.services, 6),
+    locations: siteFactValues(scraped.siteFacts?.locations, 5),
+    pagesReviewed: siteFactValues(scraped.siteFacts?.pagesReviewed, 8),
+    copyIssues: siteFactValues(scraped.siteFacts?.copyIssues, 5),
     offerHeadline: pickOfferHeadline(scraped),
     primaryCta: pickPrimaryCta(scraped),
     topTrustSignal,
@@ -611,6 +622,9 @@ export function extractSourceAnchors(scraped: ScrapedWebsiteData): string[] {
     scraped.ctas[0] ?? "",
     scraped.trustSignals[0] ?? "",
     scraped.contactSignals[0] ?? "",
+    ...(scraped.siteFacts?.services ?? []).map((fact) => fact.value),
+    ...(scraped.siteFacts?.locations ?? []).map((fact) => fact.value),
+    ...(scraped.siteFacts?.copyIssues ?? []).map((fact) => fact.value),
   ];
 
   for (const part of parts) {

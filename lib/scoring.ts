@@ -692,6 +692,15 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     );
   }
 
+  if ((scrapedData.siteFacts?.copyIssues.length ?? 0) > 0) {
+    addAdjustment(
+      penalties,
+      "Visible Copy Quality Gap",
+      3,
+      "Visible copy issues or generic credibility claims make the business feel less careful.",
+    );
+  }
+
   if (contentLength < 220) {
     addAdjustment(
       penalties,
@@ -774,6 +783,23 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   else if (stuffedHeadline) rawCaps.push(68);
   if (ctaGoalMismatch && trustSignalCount <= 1) rawCaps.push(66);
   if (ctaGoalMismatch && strongCtaCount === 0) rawCaps.push(68);
+  const visualSummary = scrapedData.visualAudit?.summary;
+  if (visualSummary) {
+    if (visualSummary.readability < 35 && visualSummary.ctaProminence < 45) {
+      rawCaps.push(58);
+    } else if (visualSummary.readability < 35) {
+      rawCaps.push(62);
+    }
+    if (visualSummary.ctaProminence < 35 && ctaGoalMismatch) {
+      rawCaps.push(57);
+    }
+    if (visualSummary.motionDistraction > 60 && visualSummary.readability < 50) {
+      rawCaps.push(60);
+    }
+  }
+  if (ctaGoalMismatch && strongCtaCount === 0 && trustSignalCount <= 1) {
+    rawCaps.push(58);
+  }
   const cappedRaw = rawCaps.length > 0 ? Math.min(preliminaryRaw, ...rawCaps) : preliminaryRaw;
   const rawScore = roundToOne(clampToRange(cappedRaw, 0, 100));
   const score = scoreOutOf10FromRaw(rawScore);

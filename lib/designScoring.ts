@@ -50,6 +50,7 @@ function ctaText(scrapedData: ScrapedWebsiteData): string {
   return [
     scrapedData.visualAudit?.desktop?.primaryCtaText,
     scrapedData.visualAudit?.mobile?.primaryCtaText,
+    scrapedData.ctas.join(" "),
     buildSiteContextSnapshot(scrapedData).primaryCta,
   ]
     .filter(Boolean)
@@ -84,7 +85,7 @@ export function scoreVisualDesign(input: VisualDesignInput): VisualDesignAssessm
 
   const keywordStuffed = hasPenalty(input.penalties, /keyword-stuffed|overloaded hero/i);
   const mismatchedCta = hasPenalty(input.penalties, /mismatched cta|wrong action/i);
-  const weakCta = hasPenalty(input.penalties, /weak cta|soft visual cta|no cta/i);
+  const weakCta = hasPenalty(input.penalties, /weak(?: visual)? cta|soft visual cta|no cta/i);
   const genericContactCta = /\bcontact\b/.test(ctaText(input.scrapedData));
 
   if (keywordStuffed) {

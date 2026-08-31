@@ -6,13 +6,14 @@ import type {
   ScrapedWebsiteData,
   VisualHints,
 } from "./types";
+import { buildSiteFacts } from "./siteFacts";
 
-const MAX_CONTENT_CHARS = 7000;
-const MAX_SNIPPET_CHARS = 1500;
+const MAX_CONTENT_CHARS = 12000;
+const MAX_SNIPPET_CHARS = 2200;
 const ABOVE_FOLD_CHARS = 5000;
 const MAX_LINES = 320;
 const MAX_FETCH_ATTEMPTS = 2;
-const MAX_TOTAL_PAGES = 4;
+const MAX_TOTAL_PAGES = 8;
 const MAX_ADDITIONAL_PAGES = MAX_TOTAL_PAGES - 1;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -313,6 +314,14 @@ function urlKey(value: string): string {
 
 function classifyPageRole(url: string): CrawlPageRole {
   const lower = url.toLowerCase();
+  try {
+    const parsed = new URL(url);
+    if ((parsed.pathname.replace(/\/+$/, "") || "/") === "/") {
+      return "home";
+    }
+  } catch {
+    // Continue with pattern-based classification.
+  }
   if (/(^|\/)(contact|contact-us|contactus)(\/|$)|#contact/.test(lower)) {
     return "contact";
   }
@@ -325,6 +334,15 @@ function classifyPageRole(url: string): CrawlPageRole {
   if (/(^|\/)(pricing|plans|packages|quote|request-quote)(\/|$)/.test(lower)) {
     return "pricing";
   }
+  if (/(^|\/)(projects|project|portfolio|work|gallery|case-studies|case-study)(\/|$)/.test(lower)) {
+    return "projects";
+  }
+  if (/(^|\/)(testimonials|testimonial|reviews|clients)(\/|$)/.test(lower)) {
+    return "testimonials";
+  }
+  if (/(^|\/)(faq|faqs|process|how-it-works)(\/|$)/.test(lower)) {
+    return "faq";
+  }
   return "other";
 }
 
@@ -336,8 +354,10 @@ function linkPriorityScore(url: string): number {
   if (/(^|\/)(services|solutions|what-we-do|products)(\/|$)/.test(lower)) score += 10;
   if (/(^|\/)(about|about-us|team|company)(\/|$)/.test(lower)) score += 9;
   if (/(^|\/)(pricing|plans|packages|quote|request-quote)(\/|$)/.test(lower)) score += 8;
-  if (/(testimonials|reviews|case-studies|case-study|clients)/.test(lower)) score += 6;
-  if (/(faq|process|how-it-works)/.test(lower)) score += 4;
+  if (/(projects|project|portfolio|work|gallery|case-studies|case-study)/.test(lower)) score += 7;
+  if (/(testimonials|reviews|clients)/.test(lower)) score += 6;
+  if (/(faq|process|how-it-works)/.test(lower)) score += 5;
+  if (/(service-area|areas-we-serve|locations)/.test(lower)) score += 4;
   if (/(blog|news|press|privacy|terms|cookie|careers|jobs|legal)/.test(lower)) score -= 8;
 
   const slashCount = (lower.match(/\//g) ?? []).length;
@@ -1052,7 +1072,7 @@ async function extractPage(
 }
 
 export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
-  const homepage = await extractPage(url, "home");
+  const homepage = await extractPage(url, classifyPageRole(url));
   const candidates = rankInternalCandidatePages(url, homepage.anchors);
   const additionalPages: PageExtractResult[] = [];
   const failedUrls: string[] = [];
@@ -1128,6 +1148,8 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     url: page.pageUrl,
     role: page.role,
     title: page.title,
+    primaryHeading: page.h1[0] || page.h2[0],
+    contentSnippet: page.content.slice(0, 650),
     contentLength: page.content.length,
     headingCount: page.h1.length + page.h2.length,
   }));
@@ -1147,7 +1169,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     failedPageCount: failedUrls.length,
   });
 
-  return {
+  const scraped: ScrapedWebsiteData = {
     url,
     title,
     description,
@@ -1170,5 +1192,10 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     retryUsed,
     usedRelaxedFallback,
     scrapeQuality,
+  };
+
+  return {
+    ...scraped,
+    siteFacts: buildSiteFacts(scraped),
   };
 }

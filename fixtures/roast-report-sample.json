@@ -39,6 +39,70 @@
       "findings": ["Primary CTA is visible but could use stronger contrast on mobile."],
       "evidence": ["Desktop and mobile samples show clear hierarchy above the fold."]
     },
+    "crawl": {
+      "strategy": "multi_page",
+      "pageCount": 3,
+      "visitedUrls": [
+        "https://lockdownstudios.example/",
+        "https://lockdownstudios.example/services",
+        "https://lockdownstudios.example/contact"
+      ],
+      "failedUrls": [],
+      "pages": [
+        {
+          "url": "https://lockdownstudios.example/",
+          "role": "home",
+          "title": "Lockdown Studios | Websites That Turn Visitors Into Leads",
+          "primaryHeading": "Websites That Turn Visitors Into Leads",
+          "contentSnippet": "Conversion-focused websites for service businesses.",
+          "contentLength": 221,
+          "headingCount": 3
+        },
+        {
+          "url": "https://lockdownstudios.example/services",
+          "role": "services",
+          "title": "Lead Websites | Lockdown Studios",
+          "primaryHeading": "Lead Websites",
+          "contentSnippet": "Website rescue, lead websites, and care plans.",
+          "contentLength": 520,
+          "headingCount": 4
+        },
+        {
+          "url": "https://lockdownstudios.example/contact",
+          "role": "contact",
+          "title": "Contact Lockdown Studios",
+          "primaryHeading": "Book a Call",
+          "contentSnippet": "Book a call with Lockdown Studios.",
+          "contentLength": 240,
+          "headingCount": 2
+        }
+      ]
+    },
+    "siteFacts": {
+      "companyName": "Lockdown Studios",
+      "services": [
+        { "value": "Web design", "sourceUrl": "https://lockdownstudios.example/services", "sourceRole": "services" },
+        { "value": "Marketing", "sourceUrl": "https://lockdownstudios.example/services", "sourceRole": "services" }
+      ],
+      "locations": [],
+      "contacts": [
+        { "value": "hello@lockdownstudios.example", "sourceUrl": "https://lockdownstudios.example/contact", "sourceRole": "contact" }
+      ],
+      "ctas": [
+        { "value": "book a call", "sourceUrl": "https://lockdownstudios.example/", "sourceRole": "home" },
+        { "value": "request a quote", "sourceUrl": "https://lockdownstudios.example/", "sourceRole": "home" }
+      ],
+      "trustSignals": [
+        { "value": "case studies", "sourceUrl": "https://lockdownstudios.example/", "sourceRole": "home" },
+        { "value": "testimonials", "sourceUrl": "https://lockdownstudios.example/", "sourceRole": "home" }
+      ],
+      "pagesReviewed": [
+        { "value": "Home: Websites That Turn Visitors Into Leads", "sourceUrl": "https://lockdownstudios.example/", "sourceRole": "home" },
+        { "value": "Services: Lead Websites", "sourceUrl": "https://lockdownstudios.example/services", "sourceRole": "services" },
+        { "value": "Contact: Book a Call", "sourceUrl": "https://lockdownstudios.example/contact", "sourceRole": "contact" }
+      ],
+      "copyIssues": []
+    },
     "contentLength": 221,
     "retryUsed": false,
     "usedRelaxedFallback": false,
@@ -52,8 +116,8 @@
       "engineVersion": "fixture",
       "generatedAt": "2026-08-28T08:00:00.000Z",
       "freshness": "fresh",
-      "sourcePageCount": 1,
-      "crawlStrategy": "single_page"
+      "sourcePageCount": 3,
+      "crawlStrategy": "multi_page"
     },
     "breakdown": {
       "clarity": 20,

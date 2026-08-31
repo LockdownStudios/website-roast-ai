@@ -43,6 +43,13 @@ type GuideContext = {
   offerLabel: string;
   audience: string;
   outcome: string;
+  companyName?: string;
+  services: string[];
+  locations: string[];
+  pagesReviewed: string[];
+  copyIssues: string[];
+  serviceLabel: string;
+  locationLabel: string;
   detectedPrimaryCta?: string;
   primaryCta: string;
   primaryCtaWasDetected: boolean;
@@ -168,6 +175,54 @@ function toTitleCase(value: string): string {
     .join(" ");
 }
 
+function humanJoin(items: string[], limit = 2): string {
+  const cleaned = items
+    .map((item) => cleanText(item))
+    .filter(Boolean)
+    .slice(0, limit);
+
+  if (cleaned.length === 0) {
+    return "";
+  }
+  if (cleaned.length === 1) {
+    return cleaned[0];
+  }
+  return `${cleaned.slice(0, -1).join(", ")} and ${cleaned[cleaned.length - 1]}`;
+}
+
+function serviceLabelFromFacts(services: string[], fallback: string): string {
+  const normalized = services.map((service) => service.toLowerCase());
+  if (normalized.includes("construction") && normalized.includes("landscaping")) {
+    return "construction and landscaping";
+  }
+  if (normalized.includes("construction") && normalized.includes("renovations")) {
+    return "construction and renovation";
+  }
+  if (normalized.includes("building services")) {
+    return "building services";
+  }
+
+  const joined = humanJoin(
+    services.filter((service) => !/^generic/i.test(service)),
+    2,
+  );
+  if (joined) {
+    return joined.toLowerCase();
+  }
+
+  const cleanedFallback = shortOffer(fallback.replace(/[:|].*$/, ""), 38)
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .trim();
+  return cleanedFallback ? cleanedFallback.toLowerCase() : "local service";
+}
+
+function locationLabelFromFacts(locations: string[]): string {
+  const preferred = locations.find(
+    (location) => !/^south africa$/i.test(location) && !/^gauteng$/i.test(location),
+  );
+  return preferred || locations[0] || "";
+}
+
 function weakOrMismatchedCtaForNiche(
   detectedCta: string | undefined,
   niche: SiteNiche,
@@ -251,6 +306,13 @@ function makeContext(
     scoring,
     niche,
     nicheLabel: snapshot.nicheLabel,
+    companyName: snapshot.companyName,
+    services: snapshot.services,
+    locations: snapshot.locations,
+    pagesReviewed: snapshot.pagesReviewed,
+    copyIssues: snapshot.copyIssues,
+    serviceLabel: serviceLabelFromFacts(snapshot.services, snapshot.offerHeadline),
+    locationLabel: locationLabelFromFacts(snapshot.locations),
     offerLabel: snapshot.offerHeadline,
     audience: defaults.audience,
     outcome: defaults.outcome,
@@ -298,7 +360,7 @@ function headlineExampleForContext(context: GuideContext): string {
 
   switch (context.niche) {
     case "local_service":
-      return `Reliable ${offerName || "local service"} with clear quotes and fast response`;
+      return `Reliable ${context.serviceLabel || offerName || "local service"}${context.locationLabel ? ` in ${context.locationLabel}` : ""} with clear quotes and fast response`;
     case "professional_service":
       return `Trusted ${offerName || "professional guidance"} for buyers who need a clear first consultation`;
     case "healthcare":
@@ -427,9 +489,17 @@ function baseObservationLines(context: GuideContext): string[] {
   const trust = context.scraped.trustSignals.slice(0, 3);
   const contacts = context.scraped.contactSignals.slice(0, 2);
   const visuals = context.scraped.visualAudit?.summary;
+  const pagesReviewed = context.pagesReviewed.slice(0, 5);
+  const services = context.services.slice(0, 5);
+  const locations = context.locations.slice(0, 4);
+  const copyIssues = context.copyIssues.slice(0, 3);
 
   const lines = [
     `Detected niche: ${context.nicheLabel}.`,
+    context.companyName ? `Company name signal: ${context.companyName}.` : "",
+    pagesReviewed.length > 1 ? `Pages reviewed: ${pagesReviewed.join(" | ")}.` : "",
+    services.length > 0 ? `Service signals: ${services.join(" | ")}.` : "",
+    locations.length > 0 ? `Location signals: ${locations.join(" | ")}.` : "",
     `Current headline snapshot: "${h1}".`,
     context.primaryCtaWasDetected
       ? `Detected primary CTA: "${context.primaryCta}".`
@@ -453,13 +523,17 @@ function baseObservationLines(context: GuideContext): string[] {
     lines.push(`Generic copy warning: ${context.genericSnapshot}.`);
   }
 
+  if (copyIssues.length > 0) {
+    lines.push(`Copy issue signals: ${copyIssues.join(" | ")}.`);
+  }
+
   if (visuals) {
     lines.push(
       `Visual signals: CTA ${visuals.ctaProminence}/100, readability ${visuals.readability}/100, hierarchy ${visuals.hierarchy}/100, consistency ${visuals.consistency}/100, motion risk ${visuals.motionDistraction}/100.`,
     );
   }
 
-  return lines.slice(0, 8);
+  return lines.filter(Boolean).slice(0, 10);
 }
 
 function brutalTruthsFromPenalties(context: GuideContext): string[] {
@@ -825,6 +899,73 @@ function fallbackFixForCategory(
   }
 }
 
+function hasService(context: GuideContext, pattern: RegExp): boolean {
+  return context.services.some((service) => pattern.test(service));
+}
+
+function siteSpecificFixes(context: GuideContext): FixBlueprintItem[] {
+  const fixes: FixBlueprintItem[] = [];
+  const serviceLocation = `${context.serviceLabel}${context.locationLabel ? ` in ${context.locationLabel}` : ""}`;
+
+  if (context.copyIssues.length > 0) {
+    fixes.push({
+      title: "Fix credibility-killing copy mistakes",
+      where: "Service-page copy, hero support text, and final CTA copy",
+      why:
+        `Visible wording issues (${context.copyIssues.slice(0, 2).join(" | ")}) make the business look less careful before buyers even make contact.`,
+      how: [
+        "Run a proofread pass on every service block and CTA support line.",
+        "Replace broken phrases with plain service outcomes and clean grammar.",
+        "Keep one reviewed sentence per service card instead of long stitched copy.",
+      ],
+      example:
+        `Before: "${context.copyIssues[0]}" | After: "Clear ${serviceLocation} with a simple quote request and fast response."`,
+      impact: "High",
+      effort: "Low",
+    });
+  }
+
+  if (
+    context.niche === "local_service" &&
+    (hasService(context, /\bconstruction\b/i) || hasService(context, /\blandscaping\b/i))
+  ) {
+    fixes.push({
+      title: "Show completed-work proof before the first quote ask",
+      where: "Hero-to-services transition and project/gallery block",
+      why:
+        `${context.serviceLabel} buyers need to see real work, locations, and proof before trusting a quote request.`,
+      how: [
+        "Add 3 to 6 real project photos with location, service type, and short outcome notes.",
+        "Place the best proof strip directly below the hero CTA.",
+        "Link service cards to matching project examples instead of sending buyers into generic copy.",
+      ],
+      example:
+        'Proof card: "Houghton landscaping project | Scope: paving + irrigation | Completed in 2 weeks"',
+      impact: "High",
+      effort: "Medium",
+    });
+  }
+
+  if (context.scraped.headings.h1.length === 0) {
+    fixes.push({
+      title: "Add one real H1 that says what the page sells",
+      where: "Top of the homepage or service page",
+      why:
+        "A missing primary heading weakens both scanning and SEO clarity. The visible page title should be machine-readable and buyer-readable.",
+      how: [
+        "Use one H1 per page.",
+        "Make it describe the service, buyer area, and outcome.",
+        `Place "${context.primaryCta}" directly below it.`,
+      ],
+      example: `H1: "${headlineExampleForContext(context)}"`,
+      impact: "High",
+      effort: "Low",
+    });
+  }
+
+  return fixes;
+}
+
 function dedupeFixes(fixes: FixBlueprintItem[]): FixBlueprintItem[] {
   const seen = new Set<string>();
   const out: FixBlueprintItem[] = [];
@@ -927,11 +1068,17 @@ export function buildImplementationBlueprint(
     .slice(0, 4)
     .map((penalty) => fixFromPenalty(context, penalty))
     .filter((fix): fix is FixBlueprintItem => Boolean(fix));
+  const evidenceFixes = siteSpecificFixes(context);
   const fallbackCategoryFixes = categoryPriority(scoring)
     .slice(0, 3)
     .map((category) => fallbackFixForCategory(context, category));
 
-  const fixes = dedupeFixes([...topPenaltyFixes, ...fallbackCategoryFixes])
+  const fixes = dedupeFixes([
+    ...topPenaltyFixes.slice(0, 2),
+    ...evidenceFixes,
+    ...topPenaltyFixes.slice(2),
+    ...fallbackCategoryFixes,
+  ])
     .map((fix) => enrichFix(context, fix))
     .slice(0, 4);
 

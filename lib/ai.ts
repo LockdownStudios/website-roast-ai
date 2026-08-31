@@ -351,6 +351,14 @@ function formatEvidenceList(items: string[], emptyLabel: string, limit = 5): str
   return items.slice(0, limit).map((item) => quoted(item, "missing")).join(" | ");
 }
 
+function formatFactList(items: string[], emptyLabel: string, limit = 5): string {
+  if (items.length === 0) {
+    return emptyLabel;
+  }
+
+  return items.slice(0, limit).join(" | ");
+}
+
 function buildVoiceDirective(
   scrapedData: ScrapedWebsiteData,
   scoringData: WebsiteScoring,
@@ -383,12 +391,19 @@ function buildSiteEvidenceDossier(
   const pageSummary = crawlPages.length > 0
     ? crawlPages
         .slice(0, 5)
-        .map((page) => `${page.role}: ${page.title || page.url} (${page.contentLength} chars)`)
+        .map((page) => {
+          const heading = page.primaryHeading ? `; heading=${page.primaryHeading}` : "";
+          return `${page.role}: ${page.title || page.url}${heading} (${page.contentLength} chars)`;
+        })
         .join(" | ")
     : "homepage only";
 
   return `SITE EVIDENCE DOSSIER (use these exact details in the roast):
 - Detected niche: ${context.nicheLabel}
+- Company/name signal: ${context.companyName ?? "not detected"}
+- Services found: ${formatFactList(context.services, "no service facts extracted", 6)}
+- Locations found: ${formatFactList(context.locations, "no location facts extracted", 5)}
+- Copy issue signals: ${formatFactList(context.copyIssues, "no copy issue signals extracted", 5)}
 - Weakest conversion area: ${weakestLabel}
 - URL: ${scrapedData.url}
 - Title: ${quoted(scrapedData.title, "No title detected")}
@@ -413,11 +428,14 @@ function siteContextPromptLines(
   return `Site context snapshot:
 - Niche: ${context.nicheLabel}
 - Offer headline: ${context.offerHeadline}
+- Services: ${formatFactList(context.services, "none extracted", 5)}
+- Locations: ${formatFactList(context.locations, "none extracted", 4)}
 - Detected CTA snapshot: ${humanSignal(context.primaryCta)}
 - Recommended CTA: ${blueprint.primaryCta} (${blueprint.primaryCtaSource})
 - Proof snapshot: ${humanSignal(context.topTrustSignal)}
 - Contact snapshot: ${humanSignal(context.contactPathSummary)}
-- Generic copy snapshot: ${context.genericCopySummary}`;
+- Generic copy snapshot: ${context.genericCopySummary}
+- Copy issue snapshot: ${formatFactList(context.copyIssues, "none extracted", 4)}`;
 }
 
 function buildUserPrompt(
@@ -490,7 +508,7 @@ Return JSON in this exact format:
   "single_biggest_leak": "string",
   "mistakes": ["string", "string", "string"],
   "lost_customers": "string",
-  "quick_fixes": ["string", "string", "string"],
+  "quick_fixes": ["string", "string", "string", "string"],
   "high_impact": "string",
   "tone_summary": "string",
   "evidence": ["string", "string", "string"],
@@ -521,7 +539,7 @@ Output constraints:
 - Do not use the URL hostname as the subject if it is localhost, 127.0.0.1, or another development host. Say "this page".
 - Do not use repeated phrasing from the Voice Directive forbidden list
 - The three visible sections must not read like the same sentence with different labels
-- quick_fixes must be immediately actionable and implementation-ready
+- quick_fixes must include at least 4 immediately actionable, implementation-ready fixes
 - each quick_fix should follow this structure: "Where: ... | Fix: ... | Example: ..."
 - If the detected CTA is weak or mismatched for the site goal, do not recommend standardizing it. Recommend the goal-led CTA from the site context instead.
 - Do not recommend "Shop Now" unless the niche is Ecommerce and the evidence shows cart, checkout, buying, or shopping signals. Service businesses need quote/book/call/consultation actions.
@@ -578,6 +596,14 @@ function normalizeStringList(value: unknown, minimum: number): string[] {
 function containsAnyPhrase(text: string, phrases: string[]): boolean {
   const lower = text.toLowerCase();
   return phrases.some((phrase) => lower.includes(phrase));
+}
+
+function hasMalformedNarrative(text: string): boolean {
+  return (
+    /"[^"]+"[a-z]/i.test(text) ||
+    /"[^"]+"\s*"[^"]+"/i.test(text) ||
+    /\b(the current homepage headline|request a quote|call us|contact us)"[a-z]/i.test(text)
+  );
 }
 
 function isSoft(text: string): boolean {
@@ -1293,7 +1319,19 @@ function enforceRoastIntensity(
     single_biggest_leak: align(singleBiggestLeak),
     mistakes: uniqueNarrativeLines(roastedMistakes.map(align), 5),
     lost_customers: align(lostCustomers),
-    quick_fixes: uniqueNarrativeLines(candidate.quick_fixes.map(align), 5),
+    quick_fixes: uniqueNarrativeLines(
+      [
+        ...candidate.quick_fixes.filter(
+          (item) =>
+            !isSoft(item) &&
+            hasImplementationShape(item) &&
+            !hasMalformedNarrative(item),
+        ),
+        ...fallbackQuickFixes(scrapedData, scoringData),
+        ...candidate.quick_fixes,
+      ].map(align),
+      5,
+    ),
     high_impact: align(highImpact),
     tone_summary: align(toneSummary),
   };
@@ -1724,6 +1762,7 @@ function isLowQualityRoast(
     ...normalized.quick_fixes,
   ].join(" ");
   if (containsAnyPhrase(combinedNarrative, GENERIC_REJECTION_PHRASES)) return true;
+  if (hasMalformedNarrative(combinedNarrative)) return true;
 
   const specificMistakeCount = normalized.mistakes.filter((item) =>
     hasSpecificity(item),
@@ -1735,7 +1774,7 @@ function isLowQualityRoast(
   ).length;
   if (vagueMistakeCount >= 1) return true;
 
-  if (normalized.quick_fixes.length < 3 || normalized.mistakes.length < 3) {
+  if (normalized.quick_fixes.length < 4 || normalized.mistakes.length < 3) {
     return true;
   }
   if (new Set(normalized.mistakes.map((item) => item.toLowerCase())).size < 3) {
@@ -1785,7 +1824,7 @@ function normalizeRoast(
   const raw = candidate as Partial<RoastResultPayload>;
   const normalizedScore = normalizeScore(raw.score, baseScore);
   const selectedMistakes = normalizeStringList(raw.mistakes, 3);
-  const selectedQuickFixes = normalizeStringList(raw.quick_fixes, 3);
+  const selectedQuickFixes = normalizeStringList(raw.quick_fixes, 4);
   const selectedEvidence = normalizeStringList(raw.evidence, 2);
   const selectedClaimContract = normalizeClaimContract(
     raw.claim_contract,

@@ -23,6 +23,8 @@ import type {
   ScoringAnalysisMeta,
   ScrapeQuality,
   ScrapedWebsiteData,
+  SiteFactEvidence,
+  SiteFacts,
   StoredRoastReport,
   VisualAudit,
   VisualDesignAssessment,
@@ -110,6 +112,9 @@ function normalizeCrawlRole(value: unknown): CrawlPageRole {
     value === "about" ||
     value === "services" ||
     value === "pricing" ||
+    value === "projects" ||
+    value === "testimonials" ||
+    value === "faq" ||
     value === "other"
   ) {
     return value;
@@ -149,6 +154,16 @@ function normalizeCrawl(
                 typeof parsed.title === "string" && parsed.title.trim()
                   ? parsed.title.trim().slice(0, 180)
                   : "No title found.",
+              primaryHeading:
+                typeof parsed.primaryHeading === "string" &&
+                parsed.primaryHeading.trim()
+                  ? parsed.primaryHeading.trim().slice(0, 180)
+                  : undefined,
+              contentSnippet:
+                typeof parsed.contentSnippet === "string" &&
+                parsed.contentSnippet.trim()
+                  ? parsed.contentSnippet.trim().slice(0, 900)
+                  : undefined,
               contentLength: clampInteger(parsed.contentLength, 0, 150000),
               headingCount: clampInteger(parsed.headingCount, 0, 200),
             },
@@ -185,6 +200,75 @@ function normalizeCrawl(
       .slice(0, 8),
     pages,
   };
+}
+
+function normalizeSiteFactList(value: unknown, limit: number): SiteFactEvidence[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") {
+        return [];
+      }
+      const parsed = item as Partial<SiteFactEvidence>;
+      const factValue =
+        typeof parsed.value === "string" && parsed.value.trim()
+          ? parsed.value.trim().slice(0, 220)
+          : "";
+      if (!factValue) {
+        return [];
+      }
+
+      return [
+        {
+          value: factValue,
+          sourceUrl:
+            typeof parsed.sourceUrl === "string" && parsed.sourceUrl.trim()
+              ? parsed.sourceUrl.trim().slice(0, 500)
+              : undefined,
+          sourceRole:
+            typeof parsed.sourceRole === "string"
+              ? normalizeCrawlRole(parsed.sourceRole)
+              : undefined,
+        },
+      ];
+    })
+    .slice(0, limit);
+}
+
+function normalizeSiteFacts(value: unknown): SiteFacts | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Partial<SiteFacts>;
+  const facts: SiteFacts = {
+    companyName:
+      typeof raw.companyName === "string" && raw.companyName.trim()
+        ? raw.companyName.trim().slice(0, 120)
+        : undefined,
+    services: normalizeSiteFactList(raw.services, 12),
+    locations: normalizeSiteFactList(raw.locations, 10),
+    contacts: normalizeSiteFactList(raw.contacts, 8),
+    ctas: normalizeSiteFactList(raw.ctas, 10),
+    trustSignals: normalizeSiteFactList(raw.trustSignals, 10),
+    pagesReviewed: normalizeSiteFactList(raw.pagesReviewed, 10),
+    copyIssues: normalizeSiteFactList(raw.copyIssues, 10),
+  };
+
+  const hasFacts =
+    Boolean(facts.companyName) ||
+    facts.services.length > 0 ||
+    facts.locations.length > 0 ||
+    facts.contacts.length > 0 ||
+    facts.ctas.length > 0 ||
+    facts.trustSignals.length > 0 ||
+    facts.pagesReviewed.length > 0 ||
+    facts.copyIssues.length > 0;
+
+  return hasFacts ? facts : undefined;
 }
 
 function leakFromBreakdown(breakdown: ScoreBreakdown): string {
@@ -415,6 +499,7 @@ function normalizeScraped(
     },
     visualAudit: normalizeVisualAudit(value.visualAudit),
     crawl,
+    siteFacts: normalizeSiteFacts(value.siteFacts),
     contentLength,
     retryUsed: Boolean(value.retryUsed),
     usedRelaxedFallback: Boolean(value.usedRelaxedFallback),
