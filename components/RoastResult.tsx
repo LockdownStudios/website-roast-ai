@@ -418,7 +418,7 @@ export function RoastResult({
           <h2 className="text-lg font-black uppercase tracking-wide text-accent-soft">
             Score Snapshot
           </h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-5">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {BREAKDOWN_ITEMS.map((item) => (
               <div
                 key={item.key}
@@ -438,6 +438,20 @@ export function RoastResult({
                 </p>
               </div>
             ))}
+            {scoring.visualDesign ? (
+              <div className="rounded-xl border border-white/10 bg-background/55 px-3 py-3 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Visual Design
+                </p>
+                <p className="mt-1 text-xl font-black text-white">
+                  {scoring.visualDesign.score.toFixed(1)}
+                  <span className="text-sm text-muted">/10</span>
+                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                  {scoring.visualDesign.label}
+                </p>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : (

@@ -86,16 +86,18 @@ function drawReportBody(
   drawParagraph(doc, cleanReportText(roast.first_impression, subject), 12, ROAST_TEXT);
   drawCallout(doc, "Single Biggest Leak", cleanReportText(roast.single_biggest_leak, subject));
 
-  drawSectionTitle(doc, "Top Mistakes");
-  drawBullets(doc, cleanList(roast.mistakes, subject, options.isUnlocked ? 5 : 3));
+  drawBulletSection(
+    doc,
+    "Top Mistakes",
+    cleanList(roast.mistakes, subject, options.isUnlocked ? 5 : 3),
+  );
 
   if (options.isUnlocked) {
-    drawSectionTitle(doc, "Score Snapshot");
+    drawSectionTitle(doc, "Score Snapshot", 82);
     drawScoreGrid(doc, scoring);
     drawSectionTitle(doc, "Lost Customers");
     drawParagraph(doc, cleanReportText(roast.lost_customers, subject), 11, ROAST_TEXT);
-    drawSectionTitle(doc, "Priority Fixes");
-    drawBullets(doc, priorityFixes(report, subject));
+    drawBulletSection(doc, "Priority Fixes", priorityFixes(report, subject));
     drawSectionTitle(doc, "High Impact Improvement");
     drawParagraph(doc, cleanReportText(roast.high_impact, subject), 11, ROAST_TEXT);
     drawBlueprint(doc, report, subject);
@@ -230,17 +232,15 @@ function drawBlueprint(
     blueprint.primaryCta,
   );
 
-  drawSubheading(doc, "Priority Focus");
-  drawBullets(
+  drawSubheadingBullets(
     doc,
+    "Priority Focus",
     cleanList(blueprint.priorities.map(formatPriorityLine), subject, 3),
   );
 
-  drawSubheading(doc, "Suggested Page Order");
-  drawBullets(doc, cleanList(blueprint.structureOrder, subject, 6));
+  drawSubheadingBullets(doc, "Suggested Page Order", cleanList(blueprint.structureOrder, subject, 6));
 
-  drawSubheading(doc, "7-Day Action Plan");
-  drawBullets(doc, cleanList(blueprint.sevenDayPlan, subject, 7));
+  drawSubheadingBullets(doc, "7-Day Action Plan", cleanList(blueprint.sevenDayPlan, subject, 7));
 }
 
 function priorityFixes(report: StoredRoastReport, subject: string): string[] {
@@ -261,8 +261,28 @@ function drawScoreGrid(doc: PDFKit.PDFDocument, scoring: WebsiteScoring) {
   const cardHeight = 64;
   let x = doc.page.margins.left;
   let y = doc.y;
+  const scoreCards: Array<{
+    key: string;
+    label: string;
+    primary: string;
+    secondary: string;
+  }> = BREAKDOWN_KEYS.map((key) => ({
+    key,
+    label: BREAKDOWN_LABELS[key],
+    primary: `${scoring.breakdown[key].toFixed(1)}/${CATEGORY_WEIGHTS[key]}`,
+    secondary: `${Math.round(categoryRatio(key, scoring.breakdown[key]) * 100)}%`,
+  }));
 
-  BREAKDOWN_KEYS.forEach((key, index) => {
+  if (scoring.visualDesign) {
+    scoreCards.push({
+      key: "visual-design",
+      label: "Visual Design",
+      primary: `${scoring.visualDesign.score.toFixed(1)}/10`,
+      secondary: scoring.visualDesign.label,
+    });
+  }
+
+  scoreCards.forEach((card, index) => {
     if (index > 0 && index % 2 === 0) {
       x = doc.page.margins.left;
       y += cardHeight + gap;
@@ -273,21 +293,21 @@ function drawScoreGrid(doc: PDFKit.PDFDocument, scoring: WebsiteScoring) {
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor(ROAST_MUTED)
-      .text(BREAKDOWN_LABELS[key].toUpperCase(), x + 12, y + 12, {
+      .text(card.label.toUpperCase(), x + 12, y + 12, {
         width: cardWidth - 24,
       });
     doc
       .font("Helvetica-Bold")
       .fontSize(22)
       .fillColor(ROAST_ACCENT_SOFT)
-      .text(`${scoring.breakdown[key].toFixed(1)}/${CATEGORY_WEIGHTS[key]}`, x + 12, y + 30, {
+      .text(card.primary, x + 12, y + 30, {
         width: cardWidth - 90,
       });
     doc
       .font("Helvetica-Bold")
       .fontSize(10)
       .fillColor(ROAST_TEXT)
-      .text(`${Math.round(categoryRatio(key, scoring.breakdown[key]) * 100)}%`, x + cardWidth - 68, y + 36, {
+      .text(card.secondary, x + cardWidth - 76, y + 36, {
         width: 54,
         align: "right",
       });
@@ -306,8 +326,8 @@ function drawLockedNotice(doc: PDFKit.PDFDocument, access: ReportAccess) {
   );
 }
 
-function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
-  ensureRoom(doc, 56);
+function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, keepWith = 0) {
+  ensureRoom(doc, 56 + keepWith);
   doc.x = doc.page.margins.left;
   doc
     .font("Helvetica-Bold")
@@ -322,8 +342,8 @@ function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
   doc.moveDown(1.05);
 }
 
-function drawSubheading(doc: PDFKit.PDFDocument, title: string) {
-  ensureRoom(doc, 32);
+function drawSubheading(doc: PDFKit.PDFDocument, title: string, keepWith = 0) {
+  ensureRoom(doc, 32 + keepWith);
   doc.x = doc.page.margins.left;
   doc
     .font("Helvetica-Bold")
@@ -331,6 +351,37 @@ function drawSubheading(doc: PDFKit.PDFDocument, title: string) {
     .fillColor(ROAST_ACCENT_SOFT)
     .text(title.toUpperCase(), { characterSpacing: 0.8 });
   doc.moveDown(0.4);
+}
+
+function firstBulletHeight(doc: PDFKit.PDFDocument, items: string[]) {
+  const first = items.map(cleanText).find(Boolean);
+  if (!first) {
+    return 0;
+  }
+
+  doc.font("Helvetica").fontSize(10.5);
+  return doc.heightOfString(first, {
+    width: contentWidth(doc) - 18,
+    lineGap: 3,
+  }) + 16;
+}
+
+function drawBulletSection(
+  doc: PDFKit.PDFDocument,
+  title: string,
+  items: string[],
+) {
+  drawSectionTitle(doc, title, firstBulletHeight(doc, items));
+  drawBullets(doc, items);
+}
+
+function drawSubheadingBullets(
+  doc: PDFKit.PDFDocument,
+  title: string,
+  items: string[],
+) {
+  drawSubheading(doc, title, firstBulletHeight(doc, items));
+  drawBullets(doc, items);
 }
 
 function drawParagraph(

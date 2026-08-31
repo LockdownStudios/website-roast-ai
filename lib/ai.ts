@@ -218,7 +218,8 @@ function categoryLine(scoringData: WebsiteScoring): string {
 Trust: ${scoringData.breakdown.trust}/${CATEGORY_WEIGHTS.trust}
 CTA: ${scoringData.breakdown.CTA}/${CATEGORY_WEIGHTS.CTA}
 Differentiation: ${scoringData.breakdown.differentiation}/${CATEGORY_WEIGHTS.differentiation}
-Design Hint: ${scoringData.breakdown.design_hint}/${CATEGORY_WEIGHTS.design_hint}`;
+Structure: ${scoringData.breakdown.design_hint}/${CATEGORY_WEIGHTS.design_hint}
+Visual Design: ${scoringData.visualDesign?.score ?? "not scored"}/10`;
 }
 
 function stableHash(value: string): number {

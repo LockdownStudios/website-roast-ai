@@ -20,6 +20,7 @@ function buildScraped(partial: Partial<ScrapedWebsiteData>): ScrapedWebsiteData 
       buttonCount: 0,
       linkCount: 0,
     },
+    visualAudit: partial.visualAudit,
     contentLength: partial.contentLength ?? (partial.content ?? "").length,
     retryUsed: partial.retryUsed ?? false,
     usedRelaxedFallback: partial.usedRelaxedFallback ?? false,
@@ -128,6 +129,7 @@ export const benchmarkCases: BenchmarkCase[] = [
     id: "construction-keyword-stuffed-contact",
     label: "Construction site with SEO-stuffed headline and soft CTA",
     expectedScoreRange: [4.8, 6.3],
+    expectedVisualDesignRange: [3.0, 4.5],
     mustFlag: [],
     mustPenalty: ["Keyword-Stuffed Headline", "Mismatched CTA Goal"],
     scraped: buildScraped({
@@ -164,6 +166,23 @@ export const benchmarkCases: BenchmarkCase[] = [
         trustTokenAboveFold: false,
         buttonCount: 2,
         linkCount: 32,
+      },
+      visualAudit: {
+        available: true,
+        sampledAt: "2026-08-31T12:07:51.570Z",
+        summary: {
+          ctaProminence: 69,
+          readability: 87,
+          hierarchy: 90,
+          consistency: 80,
+          motionDistraction: 21,
+        },
+        findings: [
+          "Visual conversion signals are directionally solid across desktop and mobile.",
+        ],
+        evidence: [
+          "Visual score summary -> CTA prominence 69/100, readability 87/100, hierarchy 90/100, consistency 80/100, motion distraction 21/100.",
+        ],
       },
     }),
   },

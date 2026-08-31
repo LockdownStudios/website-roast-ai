@@ -62,6 +62,15 @@
       "differentiation": 13,
       "design_hint": 7
     },
+    "visualDesign": {
+      "score": 7.2,
+      "label": "Strong",
+      "basis": "visual_audit",
+      "summary": "The visible structure, readability, and polish are directionally strong.",
+      "factors": [
+        "Visual audit base: CTA 72/100, readability 81/100, hierarchy 74/100, consistency 78/100."
+      ]
+    },
     "findings": [
       "Offer is clear but the mobile CTA should be more prominent.",
       "Proof exists, but before-after examples should move higher."

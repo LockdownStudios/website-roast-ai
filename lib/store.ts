@@ -25,6 +25,7 @@ import type {
   ScrapedWebsiteData,
   StoredRoastReport,
   VisualAudit,
+  VisualDesignAssessment,
   VisualSummaryScores,
   VisualViewportMetrics,
   WebsiteScoring,
@@ -456,6 +457,39 @@ function normalizeAdjustments(value: unknown): ScoreAdjustment[] {
     .slice(0, 12);
 }
 
+function normalizeVisualDesign(value: unknown): VisualDesignAssessment | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Partial<VisualDesignAssessment>;
+  const score = clampOne(raw.score, 0, 10);
+  const label =
+    raw.label === "Weak" || raw.label === "Mixed" || raw.label === "Strong"
+      ? raw.label
+      : score >= 7
+        ? "Strong"
+        : score >= 4.8
+          ? "Mixed"
+          : "Weak";
+  const basis =
+    raw.basis === "visual_audit" || raw.basis === "structure_fallback"
+      ? raw.basis
+      : "structure_fallback";
+  const summary =
+    typeof raw.summary === "string" && raw.summary.trim()
+      ? raw.summary.trim()
+      : "Visual design score was generated from available page signals.";
+
+  return {
+    score,
+    label,
+    basis,
+    summary,
+    factors: normalizeStringList(raw.factors).slice(0, 6),
+  };
+}
+
 function normalizeClaimSource(value: unknown): RoastClaimSource {
   if (
     value === "title" ||
@@ -693,6 +727,7 @@ function normalizeScoring(
   const evidence = normalizeStringList(value.evidence);
   const penalties = normalizeAdjustments(value.penalties);
   const bonuses = normalizeAdjustments(value.bonuses);
+  const visualDesign = normalizeVisualDesign(value.visualDesign);
   const analysisMeta = normalizeAnalysisMeta(
     value.analysisMeta,
     fallbackSourcePageCount,
@@ -712,6 +747,7 @@ function normalizeScoring(
     confidence,
     analysisMeta,
     breakdown,
+    visualDesign,
     findings:
       findings.length > 0
         ? findings

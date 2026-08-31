@@ -35,7 +35,10 @@ type PageLike = {
     options: { waitUntil: "domcontentloaded"; timeout: number },
   ) => Promise<void>;
   waitForTimeout: (timeout: number) => Promise<void>;
-  evaluate: <Result, Arg>(fn: (arg: Arg) => Result, arg: Arg) => Promise<Result>;
+  evaluate: {
+    <Result, Arg>(fn: (arg: Arg) => Result, arg: Arg): Promise<Result>;
+    <Result>(script: string): Promise<Result>;
+  };
 };
 
 type ViewportPreset = {
@@ -301,6 +304,7 @@ async function analyzeViewport(
       timeout: 9000,
     });
     await page.waitForTimeout(450);
+    await page.evaluate<void>("var __name = (fn) => fn;");
 
     const raw = await page.evaluate<ViewportRawMetrics, { ctaPattern: string }>(
       ({ ctaPattern }) => {

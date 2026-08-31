@@ -9,6 +9,7 @@ import {
 } from "./scoringConfig";
 import { ROAST_ENGINE_VERSION } from "./fingerprint";
 import { buildSiteContextSnapshot } from "./siteContext";
+import { scoreVisualDesign } from "./designScoring";
 import { scoreVisualAudit } from "./visualScoring";
 import type {
   ScoreAdjustment,
@@ -831,6 +832,13 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     findings.unshift("Scraped data is limited; confidence is low.");
   }
 
+  const visualDesign = scoreVisualDesign({
+    scrapedData,
+    breakdown,
+    penalties,
+    overallScore: score,
+  });
+
   // Keep ordering stable and bounded for deterministic outputs.
   const normalizedFindings = [...new Set(findings)].slice(0, 12);
 
@@ -853,6 +861,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
       crawlStrategy: scrapedData.crawl?.strategy ?? "single_page",
     },
     breakdown,
+    visualDesign,
     findings: normalizedFindings,
     evidence,
     penalties,

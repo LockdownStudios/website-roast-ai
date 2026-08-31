@@ -118,6 +118,13 @@ export function sanitizeScrapedWebsiteData(
 export function sanitizeWebsiteScoring(scoring: WebsiteScoring): WebsiteScoring {
   return {
     ...scoring,
+    visualDesign: scoring.visualDesign
+      ? {
+          ...scoring.visualDesign,
+          summary: cleanReportText(scoring.visualDesign.summary),
+          factors: cleanLines(scoring.visualDesign.factors),
+        }
+      : undefined,
     findings: cleanLines(scoring.findings),
     evidence: cleanLines(scoring.evidence),
     penalties: scoring.penalties.filter(

@@ -19,6 +19,10 @@ async function main() {
     throw new Error("Roast AI fixture PDF did not generate a valid PDF.");
   }
 
+  if (!report.scoring.visualDesign) {
+    throw new Error("Roast AI fixture is missing the visual design score.");
+  }
+
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputPath, pdf);
   console.log(`Generated ${path.relative(process.cwd(), outputPath)} (${pdf.length} bytes)`);

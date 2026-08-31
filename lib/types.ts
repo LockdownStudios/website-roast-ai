@@ -122,12 +122,21 @@ export type ScoreAdjustment = {
   reason: string;
 };
 
+export type VisualDesignAssessment = {
+  score: number;
+  label: "Weak" | "Mixed" | "Strong";
+  basis: "visual_audit" | "structure_fallback";
+  summary: string;
+  factors: string[];
+};
+
 export type WebsiteScoring = {
   score: number;
   rawScore: number;
   confidence: number;
   analysisMeta?: ScoringAnalysisMeta;
   breakdown: ScoreBreakdown;
+  visualDesign?: VisualDesignAssessment;
   findings: string[];
   evidence: string[];
   penalties: ScoreAdjustment[];
@@ -241,6 +250,7 @@ export type BenchmarkCase = {
   label: string;
   scraped: ScrapedWebsiteData;
   expectedScoreRange: [number, number];
+  expectedVisualDesignRange?: [number, number];
   mustFlag: Array<keyof ScoreBreakdown>;
   mustPenalty?: string[];
 };
@@ -250,8 +260,10 @@ export type BenchmarkCaseResult = {
   label: string;
   score: number;
   breakdown: ScoreBreakdown;
+  visualDesignScore?: number;
   expectedScoreRange: [number, number];
   scorePass: boolean;
+  visualDesignPass?: boolean;
   repeatabilityPass: boolean;
   flaggedWeaknesses: Array<keyof ScoreBreakdown>;
   missingExpectedFlags: Array<keyof ScoreBreakdown>;

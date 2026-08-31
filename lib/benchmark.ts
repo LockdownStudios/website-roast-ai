@@ -23,6 +23,12 @@ function evaluateCase(testCase: BenchmarkCase): BenchmarkCaseResult {
   const scoring = scoreWebsite(testCase.scraped);
   const roast = generateFallbackRoast(testCase.scraped, scoring);
   const [min, max] = testCase.expectedScoreRange;
+  const visualDesignScore = scoring.visualDesign?.score;
+  const visualDesignPass = testCase.expectedVisualDesignRange
+    ? typeof visualDesignScore === "number" &&
+      visualDesignScore >= testCase.expectedVisualDesignRange[0] &&
+      visualDesignScore <= testCase.expectedVisualDesignRange[1]
+    : undefined;
   const flaggedWeaknesses = (Object.entries(scoring.breakdown) as Array<
     [keyof ScoreBreakdown, number]
   >)
@@ -35,8 +41,10 @@ function evaluateCase(testCase: BenchmarkCase): BenchmarkCaseResult {
     label: testCase.label,
     score: scoring.score,
     breakdown: scoring.breakdown,
+    visualDesignScore,
     expectedScoreRange: testCase.expectedScoreRange,
     scorePass: scoring.score >= min && scoring.score <= max,
+    visualDesignPass,
     repeatabilityPass: isRepeatable(testCase),
     flaggedWeaknesses,
     missingExpectedFlags: testCase.mustFlag.filter((flag) => !flaggedWeaknesses.includes(flag)),
@@ -87,11 +95,13 @@ export function runBenchmarkSuite(): BenchmarkRun & {
   const totalCases = results.length;
   const scorePassCount = results.filter((item) => item.scorePass).length;
   const repeatabilityPassCount = results.filter((item) => item.repeatabilityPass).length;
+  const visualDesignFailures = results.filter((item) => item.visualDesignPass === false);
   const missingFlags = results.flatMap((item) => item.missingExpectedFlags);
   const missingPenalties = results.flatMap((item) => item.missingExpectedPenalties ?? []);
   const overallPass =
     scorePassCount === totalCases &&
     repeatabilityPassCount === totalCases &&
+    visualDesignFailures.length === 0 &&
     missingFlags.length === 0 &&
     missingPenalties.length === 0;
 
@@ -110,6 +120,7 @@ export function runBenchmarkSuite(): BenchmarkRun & {
     .filter(
       (item) =>
         !item.scorePass ||
+        item.visualDesignPass === false ||
         !item.repeatabilityPass ||
         item.missingExpectedFlags.length > 0 ||
         (item.missingExpectedPenalties ?? []).length > 0,
