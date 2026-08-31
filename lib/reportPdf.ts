@@ -600,7 +600,8 @@ function cleanReportText(value: string, subject: string): string {
     .replace(/\b127\.0\.0\.1(?::\d+)?\b/g, subject)
     .replace(/\b0\.0\.0\.0(?::\d+)?\b/g, subject)
     .replace(/\bTrust snapshot:/gi, "Proof gap:")
-    .replace(/\bCurrent contact snapshot:/gi, "Contact gap:");
+    .replace(/\bCurrent contact snapshot:/gi, "Contact gap:")
+    .replace(/\.{2,}/g, ".");
 
   if (hasMalformedReportText(cleaned)) {
     return `${subject} has a credibility gap: the page asks for trust before showing enough proof near the main action.`;

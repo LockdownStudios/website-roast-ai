@@ -870,6 +870,7 @@ function uniqueNarrativeLines(items: string[], limit = 5): string[] {
       .replace(/\blocalhost(?::\d+)?\b/gi, "this page")
       .replace(/\b127\.0\.0\.1(?::\d+)?\b/g, "this page")
       .replace(/\b0\.0\.0\.0(?::\d+)?\b/g, "this page")
+      .replace(/\.{2,}/g, ".")
       .replace(/\s+/g, " ")
       .trim();
     const human = humanSignal(cleaned);
@@ -1642,7 +1643,7 @@ function fallbackQuickFixes(
   const primaryCta = blueprint.primaryCta;
 
   fixes.push(
-    `Footer and final CTA section: Reuse one exact action label so intent does not drop. Example: Button text = "${primaryCta}" and microcopy = "No pressure. 20-minute intro call."`,
+    `Footer and final CTA section: Reuse one exact action label so intent does not drop. Example: Button text = "${primaryCta}" and microcopy = "${ctaMicrocopyFor(primaryCta)}"`,
   );
 
   if (scrapedData.visualAudit?.available && scrapedData.visualAudit.summary) {
@@ -1690,6 +1691,26 @@ function highImpactByWeakest(
     default:
       return "Tighten message-to-CTA flow so attention turns into action.";
   }
+}
+
+function ctaMicrocopyFor(primaryCta: string): string {
+  if (/\b(?:request|get)\s+(?:a\s+)?(?:free\s+)?(?:quote|estimate)\b/i.test(primaryCta)) {
+    return "We reply within 1 business day.";
+  }
+  if (/\bappointment\b/i.test(primaryCta)) {
+    return "Choose a time that suits you.";
+  }
+  if (/\bdiscovery\b/i.test(primaryCta)) {
+    return "No pressure. 20-minute discovery call.";
+  }
+  if (/\bconsultation\b/i.test(primaryCta)) {
+    return "No pressure. 20-minute consultation.";
+  }
+  if (/\bcall now\b/i.test(primaryCta)) {
+    return "Speak to the team today.";
+  }
+
+  return "Fast response within 1 business day.";
 }
 
 export function generateFallbackRoast(
