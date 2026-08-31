@@ -1472,7 +1472,7 @@ function fallbackMistakes(
   mistakes.push(
     ...blueprint.brutalTruths
       .slice(0, 2)
-      .map((truth) => `${siteAnchorLine(scrapedData)}. ${truth}`),
+      .map((truth) => truth),
   );
 
   if (isWeakCategory(scoringData, "clarity")) {
