@@ -17,6 +17,7 @@ import {
 } from "@/lib/store";
 import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
 import { analyzeVisualSignals } from "@/lib/visual";
+import { sanitizeRoastPayload } from "@/lib/reportSanitizer";
 import type {
   ScrapedWebsiteData,
   StoredRoastReport,
@@ -218,11 +219,12 @@ export async function POST(request: NextRequest) {
     }
 
     const generation = await generateRoastWithUsage(scraped, scoring);
+    const safeRoast = sanitizeRoastPayload(generation.roast, scraped, scoring);
     const report: StoredRoastReport = {
       id: crypto.randomUUID(),
       url: normalizedUrl,
       scrapeHash,
-      roast: withRoastAccess(generation.roast, createFreeTeaserAccess()),
+      roast: withRoastAccess(safeRoast, createFreeTeaserAccess()),
       scoring,
       scraped,
       createdAt: new Date().toISOString(),

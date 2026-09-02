@@ -17,6 +17,7 @@ export type SiteContextSnapshot = {
   nicheLabel: string;
   companyName?: string;
   services: string[];
+  exclusions: string[];
   locations: string[];
   pagesReviewed: string[];
   copyIssues: string[];
@@ -440,6 +441,22 @@ export function inferSiteNiche(scraped: ScrapedWebsiteData): SiteNiche {
   const serviceNiche = strongestServiceNiche(scores);
 
   if (scores.mobile_game >= 2 && scores.mobile_game >= scores.saas) {
+    const appStoreIntent =
+      /\b(app store|google play|ios|android|download (?:the )?app|install (?:the )?app|play now)\b/.test(
+        corpus,
+      );
+    const gameIntent =
+      /\b(mobile game|gameplay|players?|tournament|league|match|ludo)\b/.test(corpus);
+    if (appStoreIntent && gameIntent) {
+      return "mobile_game";
+    }
+  }
+
+  if (scores.mobile_game >= 2 && scores.mobile_game >= scores.saas) {
+    scores.mobile_game = 0;
+  }
+
+  if (scores.mobile_game >= 4 && scores.mobile_game >= scores.saas) {
     return "mobile_game";
   }
 
@@ -602,6 +619,7 @@ export function buildSiteContextSnapshot(
     nicheLabel: nicheLabelFromType(niche),
     companyName: scraped.siteFacts?.companyName,
     services: siteFactValues(scraped.siteFacts?.services, 6),
+    exclusions: siteFactValues(scraped.siteFacts?.exclusions, 6),
     locations: siteFactValues(scraped.siteFacts?.locations, 5),
     pagesReviewed: siteFactValues(scraped.siteFacts?.pagesReviewed, 8),
     copyIssues: siteFactValues(scraped.siteFacts?.copyIssues, 5),
@@ -623,6 +641,7 @@ export function extractSourceAnchors(scraped: ScrapedWebsiteData): string[] {
     scraped.trustSignals[0] ?? "",
     scraped.contactSignals[0] ?? "",
     ...(scraped.siteFacts?.services ?? []).map((fact) => fact.value),
+    ...(scraped.siteFacts?.exclusions ?? []).map((fact) => `Does not offer ${fact.value}`),
     ...(scraped.siteFacts?.locations ?? []).map((fact) => fact.value),
     ...(scraped.siteFacts?.copyIssues ?? []).map((fact) => fact.value),
   ];

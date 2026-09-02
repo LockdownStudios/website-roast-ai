@@ -11,21 +11,37 @@ type PatternFact = {
   pattern: RegExp;
 };
 
+type ExclusionRule = {
+  value: string;
+  patterns: RegExp[];
+};
+
 type SourceHint = {
   sourceUrl?: string;
   sourceRole?: CrawlPageRole;
 };
 
 const SERVICE_PATTERNS: PatternFact[] = [
-  { value: "Construction", pattern: /\bconstruction\b/i },
+  { value: "Construction", pattern: /\b(?:construction services?|construction company|building construction|residential construction|commercial construction|industrial construction)\b/i },
   { value: "Building services", pattern: /\bbuilding (?:services|contractors?|projects?)\b/i },
   { value: "Residential construction", pattern: /\bresidential construction\b/i },
   { value: "Commercial construction", pattern: /\bcommercial construction\b/i },
   { value: "Industrial construction", pattern: /\bindustrial construction\b/i },
   { value: "Renovations", pattern: /\brenovations?\b/i },
   { value: "Paving", pattern: /\bpaving\b/i },
+  { value: "Driveway paving", pattern: /\bdriveway paving\b/i },
+  { value: "Patio and pool paving", pattern: /\b(?:patio|pool)(?:s| area| deck)?(?:\s+and\s+|\s*&\s*|\s+\/\s+)?(?:patio|pool)?\s*paving\b|\bpatios?\s*&\s*pool decks?\b/i },
+  { value: "Commercial and industrial paving", pattern: /\bcommercial (?:&|and) industrial paving\b/i },
+  { value: "Cladding", pattern: /\bcladding\b/i },
+  { value: "Paving cleaning", pattern: /\bpav(?:e|ing)[-\s]?kleen\b|\bpaving cleaning\b/i },
   { value: "Landscaping", pattern: /\blandscap(?:e|ing)\b/i },
+  { value: "Residential landscaping", pattern: /\bresidential landscaping\b/i },
+  { value: "Commercial landscaping", pattern: /\bcommercial landscaping\b/i },
   { value: "Garden maintenance", pattern: /\bgarden maintenance\b/i },
+  { value: "Water features", pattern: /\bwater features?\b/i },
+  { value: "Bomas and entertainment areas", pattern: /\bbomas?(?:\s+(?:&|and)\s+entertainment areas?)?\b/i },
+  { value: "Herb and vegetable gardens", pattern: /\bherb\s*(?:&|and)\s*veg(?:etable)? gardens?\b/i },
+  { value: "Garden decor", pattern: /\bgarden decor\b/i },
   { value: "Instant lawns", pattern: /\binstant lawns?\b/i },
   { value: "Tree felling", pattern: /\btree felling\b/i },
   { value: "Irrigation", pattern: /\birrigation\b/i },
@@ -76,6 +92,36 @@ const COPY_ISSUE_PATTERNS: PatternFact[] = [
   { value: "Generic claim: quality service", pattern: /\bquality service\b/i },
   { value: "Generic claim: affordable prices", pattern: /\baffordable prices\b/i },
   { value: "Generic claim: customer satisfaction", pattern: /\bcustomer satisfaction\b/i },
+];
+
+const EXCLUSION_RULES: ExclusionRule[] = [
+  {
+    value: "Garden maintenance",
+    patterns: [
+      /\b(?:do\s+not|don't|does\s+not|doesn't|no\s+longer)\s+(?:offer|provide|do)\s+(?:ongoing\s+)?garden maintenance\b/i,
+      /\b(?:we\s+)?(?:do\s+not|don't)\s+offer\s+garden maintenance\b/i,
+      /\bno\s+ongoing\s+garden maintenance\b/i,
+    ],
+  },
+  {
+    value: "Maintenance",
+    patterns: [
+      /\b(?:do\s+not|don't|does\s+not|doesn't)\s+(?:offer|provide|do)\s+(?:ongoing\s+)?maintenance\b/i,
+      /\bno\s+ongoing\s+maintenance\b/i,
+    ],
+  },
+  {
+    value: "Construction",
+    patterns: [
+      /\b(?:do\s+not|don't|does\s+not|doesn't)\s+(?:offer|provide|do)\s+construction\b/i,
+    ],
+  },
+  {
+    value: "Landscaping",
+    patterns: [
+      /\b(?:do\s+not|don't|does\s+not|doesn't)\s+(?:offer|provide|do)\s+landscap(?:e|ing)\b/i,
+    ],
+  },
 ];
 
 function cleanText(value: string): string {
@@ -170,6 +216,7 @@ function factsFromPatterns(
   scraped: ScrapedWebsiteData,
   patterns: PatternFact[],
   limit: number,
+  excludedValues: Set<string> = new Set(),
 ): SiteFactEvidence[] {
   const corpus = [
     scraped.title,
@@ -182,6 +229,9 @@ function factsFromPatterns(
   const seen = new Set<string>();
 
   for (const item of patterns) {
+    if (excludedValues.has(normalizeKey(item.value))) {
+      continue;
+    }
     if (!item.pattern.test(corpus)) {
       continue;
     }
@@ -192,6 +242,48 @@ function factsFromPatterns(
   }
 
   return facts;
+}
+
+function exclusionFacts(scraped: ScrapedWebsiteData): SiteFactEvidence[] {
+  const facts: SiteFactEvidence[] = [];
+  const seen = new Set<string>();
+  const pages = scraped.crawl?.pages ?? [];
+  const fallbackPages =
+    pages.length > 0
+      ? pages
+      : [
+          {
+            url: scraped.url,
+            role: "home" as const,
+            title: scraped.title,
+            primaryHeading: scraped.headings.h1[0],
+            contentSnippet: scraped.contentSnippet,
+            contentLength: scraped.contentLength,
+            headingCount: scraped.headings.h1.length + scraped.headings.h2.length,
+          },
+        ];
+
+  for (const rule of EXCLUSION_RULES) {
+    for (const pattern of rule.patterns) {
+      const page = fallbackPages.find((item) =>
+        pattern.test(
+          [item.title, item.primaryHeading, item.contentSnippet].filter(Boolean).join(" "),
+        ),
+      );
+
+      if (page) {
+        pushFact(
+          facts,
+          seen,
+          rule.value,
+          { sourceUrl: page.url, sourceRole: page.role },
+        );
+        break;
+      }
+    }
+  }
+
+  return facts.slice(0, 8);
 }
 
 function signalFacts(
@@ -297,10 +389,13 @@ export function siteFactValues(
 
 export function buildSiteFacts(scraped: ScrapedWebsiteData): SiteFacts {
   const fallbackSource: SourceHint = { sourceUrl: scraped.url, sourceRole: "home" };
+  const exclusions = exclusionFacts(scraped);
+  const excludedValues = new Set(exclusions.map((fact) => normalizeKey(fact.value)));
 
   return {
     companyName: companyName(scraped),
-    services: factsFromPatterns(scraped, SERVICE_PATTERNS, 10),
+    services: factsFromPatterns(scraped, SERVICE_PATTERNS, 10, excludedValues),
+    exclusions,
     locations: factsFromPatterns(scraped, LOCATION_PATTERNS, 8),
     contacts: signalFacts(scraped.contactSignals, fallbackSource, 6),
     ctas: signalFacts(scraped.ctas, fallbackSource, 8),

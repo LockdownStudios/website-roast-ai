@@ -99,7 +99,7 @@ export function UnlockFullReport({ reportId, priceZar }: UnlockFullReportProps) 
         {isLoading ? "Redirecting to Checkout..." : `Unlock Full Report - R${priceZar}`}
       </button>
       <p className="mt-2 text-[11px] text-muted">
-        Secure checkout powered by Paystack. Test mode works with `sk_test` keys.
+        Secure checkout powered by Paystack. The full report unlocks after payment is verified.
       </p>
       {error ? (
         <p className="mt-3 rounded-xl border border-danger/45 bg-danger/10 px-3 py-2 text-sm text-red-200">

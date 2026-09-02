@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ScrapedWebsiteData } from "./types";
 
-export const ROAST_ENGINE_VERSION = "v20-evidence-led-roasts";
+export const ROAST_ENGINE_VERSION = "v21-grounded-full-scope-roasts";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
@@ -28,6 +28,9 @@ export function createScrapeHash(data: ScrapedWebsiteData): string {
             ? normalizeText(data.siteFacts.companyName)
             : undefined,
           services: data.siteFacts.services.map((fact) => normalizeText(fact.value)),
+          exclusions: (data.siteFacts.exclusions ?? []).map((fact) =>
+            normalizeText(fact.value),
+          ),
           locations: data.siteFacts.locations.map((fact) => normalizeText(fact.value)),
           copyIssues: data.siteFacts.copyIssues.map((fact) => normalizeText(fact.value)),
           pagesReviewed: data.siteFacts.pagesReviewed

@@ -1,6 +1,6 @@
 import type { ReportAccess, RoastResultPayload, ReportUnlockSource } from "./types";
 
-export const DEFAULT_UNLOCK_PRICE_ZAR = 99;
+export const DEFAULT_UNLOCK_PRICE_ZAR = 49;
 
 function clampPrice(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {

@@ -13,7 +13,7 @@ const MAX_SNIPPET_CHARS = 2200;
 const ABOVE_FOLD_CHARS = 5000;
 const MAX_LINES = 320;
 const MAX_FETCH_ATTEMPTS = 2;
-const MAX_TOTAL_PAGES = 8;
+const MAX_TOTAL_PAGES = 10;
 const MAX_ADDITIONAL_PAGES = MAX_TOTAL_PAGES - 1;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -417,6 +417,151 @@ function rankInternalCandidatePages(
         role,
         score: priority,
       });
+    }
+  }
+
+  return [...bestByUrl.values()]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_ADDITIONAL_PAGES);
+}
+
+function sitemapUrlFor(baseUrl: string, pathname: string): string | null {
+  try {
+    const parsed = new URL(baseUrl);
+    parsed.pathname = pathname;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTextQuietly(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "WebsiteRoastAI/1.0 (+https://local.dev)",
+        Accept: "application/xml,text/xml,text/plain,*/*;q=0.8",
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.text()).slice(0, 1_000_000);
+  } catch {
+    return null;
+  }
+}
+
+function extractSitemapLocs(xml: string): string[] {
+  return [...xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)]
+    .map((match) => decodeEntities(match[1] ?? ""))
+    .filter(Boolean)
+    .slice(0, 400);
+}
+
+function isLikelyHtmlPage(url: string): boolean {
+  return !/\.(?:jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|mov|avi|webm|css|js|xml)(?:[?#].*)?$/i.test(
+    url,
+  );
+}
+
+async function discoverSitemapCandidatePages(baseUrl: string): Promise<CandidatePage[]> {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return [];
+  }
+
+  const sitemapUrls = new Set<string>();
+  const defaultSitemap = sitemapUrlFor(baseUrl, "/sitemap.xml");
+  const robotsUrl = sitemapUrlFor(baseUrl, "/robots.txt");
+
+  if (defaultSitemap) {
+    sitemapUrls.add(defaultSitemap);
+  }
+
+  if (robotsUrl) {
+    const robots = await fetchTextQuietly(robotsUrl);
+    const robotSitemaps =
+      robots?.match(/^sitemap:\s*(.+)$/gim)?.map((line) => line.replace(/^sitemap:\s*/i, "").trim()) ??
+      [];
+    for (const sitemap of robotSitemaps) {
+      sitemapUrls.add(sitemap);
+    }
+  }
+
+  const discoveredPageUrls = new Set<string>();
+  const visitedSitemaps = new Set<string>();
+
+  for (const sitemap of [...sitemapUrls].slice(0, 6)) {
+    if (visitedSitemaps.has(sitemap)) {
+      continue;
+    }
+    visitedSitemaps.add(sitemap);
+
+    const xml = await fetchTextQuietly(sitemap);
+    if (!xml) {
+      continue;
+    }
+
+    const locs = extractSitemapLocs(xml);
+    const nestedSitemaps = locs.filter((loc) => /\.xml(?:[?#].*)?$/i.test(loc));
+    const pageLocs = locs.filter((loc) => isLikelyHtmlPage(loc));
+
+    for (const loc of pageLocs) {
+      discoveredPageUrls.add(loc);
+    }
+
+    for (const nested of nestedSitemaps.slice(0, 4)) {
+      if (visitedSitemaps.has(nested)) {
+        continue;
+      }
+      visitedSitemaps.add(nested);
+      const nestedXml = await fetchTextQuietly(nested);
+      if (!nestedXml) {
+        continue;
+      }
+      for (const loc of extractSitemapLocs(nestedXml).filter((item) => isLikelyHtmlPage(item))) {
+        discoveredPageUrls.add(loc);
+      }
+    }
+  }
+
+  const homeKey = urlKey(base.toString());
+  return [...discoveredPageUrls]
+    .map((pageUrl) => {
+      try {
+        const parsed = new URL(pageUrl, baseUrl);
+        parsed.hash = "";
+        if (parsed.origin !== base.origin || urlKey(parsed.toString()) === homeKey) {
+          return null;
+        }
+        const role = classifyPageRole(parsed.toString());
+        const score = linkPriorityScore(parsed.toString()) + (role === "other" ? 0 : 3);
+        return { url: parsed.toString(), role, score };
+      } catch {
+        return null;
+      }
+    })
+    .filter((candidate): candidate is CandidatePage => Boolean(candidate))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_ADDITIONAL_PAGES);
+}
+
+function mergeCandidatePages(...groups: CandidatePage[][]): CandidatePage[] {
+  const bestByUrl = new Map<string, CandidatePage>();
+
+  for (const candidate of groups.flat()) {
+    const key = urlKey(candidate.url);
+    const existing = bestByUrl.get(key);
+    if (!existing || candidate.score > existing.score) {
+      bestByUrl.set(key, candidate);
     }
   }
 
@@ -1073,7 +1218,10 @@ async function extractPage(
 
 export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
   const homepage = await extractPage(url, classifyPageRole(url));
-  const candidates = rankInternalCandidatePages(url, homepage.anchors);
+  const candidates = mergeCandidatePages(
+    rankInternalCandidatePages(url, homepage.anchors),
+    await discoverSitemapCandidatePages(url),
+  );
   const additionalPages: PageExtractResult[] = [];
   const failedUrls: string[] = [];
 

@@ -8,9 +8,14 @@ import type {
   VisualAudit,
   WebsiteScoring,
 } from "./types";
+import { buildImplementationBlueprint } from "./implementationGuide";
+import { inferSiteNiche } from "./siteContext";
 
 const INTERNAL_DIAGNOSTIC_PATTERN =
   /visual analysis unavailable|browsertype\.launch|playwright install|chrome-headless-shell|looks like playwright was just installed/i;
+
+const CROSS_SITE_CONTAMINATION_PATTERN =
+  /\b(?:mobile game|mobile players?|players?\s+(?:to|who|will|can)|download the app|install (?:the )?app|start playing|app-store|app store|google play)\b/i;
 
 function isInternalDiagnosticLine(value: string) {
   return INTERNAL_DIAGNOSTIC_PATTERN.test(value);
@@ -61,7 +66,94 @@ function cleanLines(lines: string[]) {
     .filter((line) => line && !isInternalDiagnosticLine(line));
 }
 
-function cleanClaimContract(claims: RoastClaim[] | undefined) {
+function preferredCtaForSite(
+  scraped: ScrapedWebsiteData | undefined,
+  scoring: WebsiteScoring | undefined,
+): string {
+  if (scraped && scoring) {
+    return buildImplementationBlueprint(scraped, scoring).primaryCta;
+  }
+
+  const detected = scraped?.ctas.find((cta) =>
+    /\b(?:quote|consultation|appointment|call|contact|estimate|book|request)\b/i.test(cta),
+  );
+
+  return detected ? cleanReportText(detected) : "Request a Quote";
+}
+
+function isMobileGameContext(scraped: ScrapedWebsiteData | undefined): boolean {
+  return scraped ? inferSiteNiche(scraped) === "mobile_game" : false;
+}
+
+function scrubCrossSiteContamination(
+  value: string,
+  options: {
+    scraped?: ScrapedWebsiteData;
+    scoring?: WebsiteScoring;
+  } = {},
+): string {
+  let cleaned = cleanReportText(value);
+  if (!cleaned) {
+    return cleaned;
+  }
+
+  if (!isMobileGameContext(options.scraped)) {
+    const cta = preferredCtaForSite(options.scraped, options.scoring);
+    cleaned = cleaned
+      .replace(/\bDownload The App\b/gi, cta)
+      .replace(/\bdownload (?:the )?app\b/gi, cta.toLowerCase())
+      .replace(/\binstall (?:the )?app\b/gi, "take the next step")
+      .replace(/\bstart playing\b/gi, "take action")
+      .replace(/\bmobile game buyers?\b/gi, "buyers")
+      .replace(/\bmobile players?\b/gi, "buyers")
+      .replace(/\bplayers\b/gi, "buyers")
+      .replace(/\bapp-store\b/gi, "trust")
+      .replace(/\bapp store\b/gi, "trust")
+      .replace(/\bgoogle play\b/gi, "trust");
+  }
+
+  for (const exclusion of options.scraped?.siteFacts?.exclusions ?? []) {
+    const valuePattern = new RegExp(
+      `\\b${cleanReportText(exclusion.value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "gi",
+    );
+    cleaned = cleaned.replace(valuePattern, "the services this site actually offers");
+  }
+
+  return cleanReportText(cleaned);
+}
+
+function hasCrossSiteContamination(
+  value: string,
+  scraped: ScrapedWebsiteData | undefined,
+): boolean {
+  return !isMobileGameContext(scraped) && CROSS_SITE_CONTAMINATION_PATTERN.test(value);
+}
+
+function cleanGroundedLines(
+  lines: string[],
+  options: {
+    scraped?: ScrapedWebsiteData;
+    scoring?: WebsiteScoring;
+  } = {},
+) {
+  return lines
+    .map((line) => scrubCrossSiteContamination(line, options))
+    .filter(
+      (line) =>
+        line &&
+        !isInternalDiagnosticLine(line) &&
+        !hasCrossSiteContamination(line, options.scraped),
+    );
+}
+
+function cleanClaimContract(
+  claims: RoastClaim[] | undefined,
+  options: {
+    scraped?: ScrapedWebsiteData;
+    scoring?: WebsiteScoring;
+  } = {},
+) {
   if (!claims) {
     return undefined;
   }
@@ -69,8 +161,8 @@ function cleanClaimContract(claims: RoastClaim[] | undefined) {
   return claims
     .map((claim) => ({
       ...claim,
-      claim: cleanReportText(claim.claim),
-      evidence: cleanReportText(claim.evidence),
+      claim: scrubCrossSiteContamination(claim.claim, options),
+      evidence: scrubCrossSiteContamination(claim.evidence, options),
     }))
     .filter(
       (claim) =>
@@ -107,6 +199,7 @@ function sanitizeSiteFacts(siteFacts: SiteFacts | undefined): SiteFacts | undefi
       ? cleanReportText(siteFacts.companyName)
       : undefined,
     services: cleanFactList(siteFacts.services),
+    exclusions: cleanFactList(siteFacts.exclusions ?? []),
     locations: cleanFactList(siteFacts.locations),
     contacts: cleanFactList(siteFacts.contacts),
     ctas: cleanFactList(siteFacts.ctas),
@@ -176,18 +269,21 @@ export function sanitizeWebsiteScoring(scoring: WebsiteScoring): WebsiteScoring 
 
 export function sanitizeRoastPayload(
   roast: RoastResultPayload,
+  scraped?: ScrapedWebsiteData,
+  scoring?: WebsiteScoring,
 ): RoastResultPayload {
+  const options = { scraped, scoring };
   return {
     ...roast,
-    first_impression: cleanReportText(roast.first_impression),
-    single_biggest_leak: cleanReportText(roast.single_biggest_leak),
-    mistakes: cleanLines(roast.mistakes),
-    lost_customers: cleanReportText(roast.lost_customers),
-    quick_fixes: cleanLines(roast.quick_fixes),
-    high_impact: cleanReportText(roast.high_impact),
-    tone_summary: cleanReportText(roast.tone_summary),
-    evidence: cleanLines(roast.evidence),
-    claim_contract: cleanClaimContract(roast.claim_contract),
+    first_impression: scrubCrossSiteContamination(roast.first_impression, options),
+    single_biggest_leak: scrubCrossSiteContamination(roast.single_biggest_leak, options),
+    mistakes: cleanGroundedLines(roast.mistakes, options),
+    lost_customers: scrubCrossSiteContamination(roast.lost_customers, options),
+    quick_fixes: cleanGroundedLines(roast.quick_fixes, options),
+    high_impact: scrubCrossSiteContamination(roast.high_impact, options),
+    tone_summary: scrubCrossSiteContamination(roast.tone_summary, options),
+    evidence: cleanGroundedLines(roast.evidence, options),
+    claim_contract: cleanClaimContract(roast.claim_contract, options),
   };
 }
 
@@ -198,6 +294,6 @@ export function sanitizeStoredRoastReport(
     ...report,
     scraped: sanitizeScrapedWebsiteData(report.scraped),
     scoring: sanitizeWebsiteScoring(report.scoring),
-    roast: sanitizeRoastPayload(report.roast),
+    roast: sanitizeRoastPayload(report.roast, report.scraped, report.scoring),
   };
 }

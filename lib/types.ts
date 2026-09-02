@@ -91,6 +91,7 @@ export type SiteFactEvidence = {
 export type SiteFacts = {
   companyName?: string;
   services: SiteFactEvidence[];
+  exclusions?: SiteFactEvidence[];
   locations: SiteFactEvidence[];
   contacts: SiteFactEvidence[];
   ctas: SiteFactEvidence[];

@@ -103,7 +103,7 @@ function toClientReportPayload(
     },
   };
 
-  const safeRoast = sanitizeRoastPayload(roast);
+  const safeRoast = sanitizeRoastPayload(roast, report.scraped, report.scoring);
   const scoring = unlocked
     ? scoringWithMeta
     : {
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     }
 
     const roast = withRoastAccess(
-      await generateRoast(scraped, scoring),
+      sanitizeRoastPayload(await generateRoast(scraped, scoring), scraped, scoring),
       createFreeTeaserAccess(),
     );
     const id = crypto.randomUUID();

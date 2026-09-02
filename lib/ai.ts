@@ -402,6 +402,7 @@ function buildSiteEvidenceDossier(
 - Detected niche: ${context.nicheLabel}
 - Company/name signal: ${context.companyName ?? "not detected"}
 - Services found: ${formatFactList(context.services, "no service facts extracted", 6)}
+- Explicit exclusions / not-offered services: ${formatFactList(context.exclusions, "none detected", 6)}
 - Locations found: ${formatFactList(context.locations, "no location facts extracted", 5)}
 - Copy issue signals: ${formatFactList(context.copyIssues, "no copy issue signals extracted", 5)}
 - Weakest conversion area: ${weakestLabel}
@@ -429,6 +430,7 @@ function siteContextPromptLines(
 - Niche: ${context.nicheLabel}
 - Offer headline: ${context.offerHeadline}
 - Services: ${formatFactList(context.services, "none extracted", 5)}
+- Explicit exclusions: ${formatFactList(context.exclusions, "none detected", 5)}
 - Locations: ${formatFactList(context.locations, "none extracted", 4)}
 - Detected CTA snapshot: ${humanSignal(context.primaryCta)}
 - Recommended CTA: ${blueprint.primaryCta} (${blueprint.primaryCtaSource})
@@ -543,7 +545,9 @@ Output constraints:
 - each quick_fix should follow this structure: "Where: ... | Fix: ... | Example: ..."
 - If the detected CTA is weak or mismatched for the site goal, do not recommend standardizing it. Recommend the goal-led CTA from the site context instead.
 - Do not recommend "Shop Now" unless the niche is Ecommerce and the evidence shows cart, checkout, buying, or shopping signals. Service businesses need quote/book/call/consultation actions.
-- For mobile games or app pages, the primary CTA should usually drive install/download/play intent, not contact intent.
+- Only use mobile-game/app language when Detected niche is Mobile Game and the dossier shows app-store, download, install, gameplay, or player evidence.
+- Never write "Download The App", "mobile players", "mobile game buyers", "install the app", or "start playing" for local service, construction, landscaping, professional service, healthcare, agency, ecommerce, or generic sites.
+- Respect explicit exclusions. If the site says it does not offer a service, never list that service as an offering or recommend it as if it is available.
 - Use exact site details (headline/CTA/trust/contact/visual findings). If details are missing, say they are missing and roast that absence.
 - Include at least 5 sharp roast lines across first_impression, single_biggest_leak, lost_customers, and mistakes
 - Harshness target: 9/10. Punch hard, stay useful, and make it feel unmistakably about this website.

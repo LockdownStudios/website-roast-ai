@@ -54,7 +54,7 @@ Open `http://localhost:3000`.
 - `GET /api/auth/me` -> resolve current auth user from bearer token
 - `GET /api/reports/mine` -> fetch current user reports
 - `GET /api/reports/download?id=<reportId>` -> download a stored report PDF
-- `POST /api/reports/unlock` -> temporary mock unlock for full report (payment-ready hook point)
+- `POST /api/reports/unlock` -> disabled legacy mock unlock endpoint; paid public unlocks must use Paystack
 - `POST /api/paystack/initialize` -> initialize Paystack checkout for full report unlock
 - `GET /api/paystack/verify` -> verify Paystack callback and unlock report
 - `POST /api/paystack/webhook` -> Paystack webhook endpoint for async unlock confirmation
@@ -128,7 +128,7 @@ curl -X POST http://localhost:3000/api/internal/calibrate \
 
 - New reports default to `free_teaser` access.
 - Free teaser shows score + first impression + biggest leak + top mistakes.
-- Full report unlock exposes score breakdown, lost-customer analysis, quick fixes, and high-impact plan.
+- Full report unlock is R49 and exposes score breakdown, lost-customer analysis, quick fixes, and high-impact plan.
 - Unlock checkout now uses Paystack (`/api/paystack/initialize` -> Paystack Checkout -> `/api/paystack/verify`).
 - Configure Paystack webhook to `POST /api/paystack/webhook` for robust async confirmation.
 

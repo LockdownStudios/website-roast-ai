@@ -1,6 +1,4 @@
 "use client";
-
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AuthStatus } from "@/components/AuthStatus";
 import { ScrollScrubVideo } from "@/components/ScrollScrubVideo";
@@ -87,18 +85,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen px-5 py-6 sm:px-8 sm:py-8 lg:px-12">
-      <div className="mx-auto mb-4 flex w-full max-w-6xl flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/my-reports"
-          className="inline-flex rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-muted transition hover:border-accent/50 hover:text-accent-soft"
-        >
-          My Reports
-        </Link>
+      <div className="mx-auto mb-4 flex w-full max-w-6xl justify-end">
         <AuthStatus />
       </div>
 
       <section className="relative overflow-hidden rounded-3xl border border-white/12 bg-surface/90 px-6 py-8 shadow-[0_28px_90px_rgba(0,0,0,0.45)] sm:px-10 sm:py-10">
-        <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 lg:flex-row lg:items-stretch">
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 lg:flex-row lg:items-start">
           <div className="flex-1">
             <p className="inline-flex rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-soft">
               Website Roast AI
@@ -125,6 +117,9 @@ export default function Home() {
               </span>
               <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-white/85">
                 No signup required
+              </span>
+              <span className="rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-accent-soft">
+                Full report R49
               </span>
             </div>
           </div>
