@@ -536,11 +536,9 @@ export async function savePaymentTransactionToSupabase(
     return false;
   }
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     reference: payment.reference,
     report_id: payment.reportId,
-    user_id: payment.userId ?? null,
-    email: payment.email ?? null,
     amount_kobo: payment.amountKobo,
     currency: payment.currency,
     status: payment.status,
@@ -551,12 +549,63 @@ export async function savePaymentTransactionToSupabase(
     created_at: payment.createdAt,
     updated_at: payment.updatedAt,
   };
+  if (payment.userId) {
+    payload.user_id = payment.userId;
+  }
+  if (payment.email) {
+    payload.email = payment.email;
+  }
 
   return supabaseWrite(
     "payment_transactions?on_conflict=reference",
     payload,
     "resolution=merge-duplicates,return=minimal",
   );
+}
+
+export async function getRecoverableReportIdsByEmailFromSupabase(
+  email: string,
+  limit: number,
+): Promise<string[] | null> {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    select: "report_id,status,email,updated_at",
+    email: `eq.${normalizedEmail}`,
+    order: "updated_at.desc",
+    limit: String(limit),
+  });
+
+  const rows = await supabaseFetch<Array<{ report_id?: unknown; status?: unknown }>>(
+    "payment_transactions",
+    { method: "GET" },
+    params,
+  );
+
+  if (!rows) {
+    return null;
+  }
+
+  const allowedStatuses = new Set(["initialized", "success", "webhook_success"]);
+  const ids = rows.flatMap((row) => {
+    if (
+      typeof row.report_id === "string" &&
+      typeof row.status === "string" &&
+      allowedStatuses.has(row.status)
+    ) {
+      return [row.report_id];
+    }
+    return [];
+  });
+
+  return Array.from(new Set(ids)).slice(0, limit);
 }
 
 export async function getRecentPaymentTransactionsFromSupabase(

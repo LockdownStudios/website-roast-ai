@@ -43,6 +43,19 @@ function extractReportIdFromMetadata(payload: PaystackWebhookPayload): string | 
   return trimmed ? trimmed : null;
 }
 
+function resolvePayerEmail(
+  verificationEmail: string | null,
+  metadata: Record<string, unknown>,
+): string | null {
+  if (verificationEmail) {
+    return verificationEmail.trim().toLowerCase();
+  }
+
+  return typeof metadata.payerEmail === "string"
+    ? metadata.payerEmail.trim().toLowerCase()
+    : null;
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get("x-paystack-signature");
@@ -94,6 +107,7 @@ export async function POST(request: NextRequest) {
           typeof verification.metadata.userId === "string"
             ? verification.metadata.userId
             : report.userId ?? null,
+        email: resolvePayerEmail(verification.customerEmail, verification.metadata),
         amountKobo: verification.amountKobo || expectedAmountKobo,
         currency: verification.currency ?? "ZAR",
         status: "webhook_ignored",
@@ -112,6 +126,7 @@ export async function POST(request: NextRequest) {
         typeof verification.metadata.userId === "string"
           ? verification.metadata.userId
           : report.userId ?? null,
+      email: resolvePayerEmail(verification.customerEmail, verification.metadata),
       amountKobo: verification.amountKobo || expectedAmountKobo,
       currency: verification.currency ?? "ZAR",
       status: "webhook_success",

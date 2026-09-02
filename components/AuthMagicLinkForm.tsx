@@ -11,6 +11,7 @@ import {
 
 type AuthMagicLinkFormProps = {
   className?: string;
+  redirectTo?: string;
 };
 
 function normalizeEmail(value: string): string | null {
@@ -31,7 +32,10 @@ function normalizeCode(value: string): string | null {
   return normalized;
 }
 
-export function AuthMagicLinkForm({ className = "" }: AuthMagicLinkFormProps) {
+export function AuthMagicLinkForm({
+  className = "",
+  redirectTo = "/my-reports",
+}: AuthMagicLinkFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -131,7 +135,7 @@ export function AuthMagicLinkForm({ className = "" }: AuthMagicLinkFormProps) {
 
       setStatus("sent");
       setMessage("Signed in. Redirecting...");
-      router.replace("/my-reports");
+      router.replace(redirectTo);
     } catch (error) {
       setStatus("error");
       setMessage(

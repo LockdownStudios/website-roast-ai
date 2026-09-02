@@ -20,6 +20,7 @@ export type PaystackVerifyResult = {
   status: string;
   amountKobo: number;
   currency: string | null;
+  customerEmail: string | null;
   metadata: Record<string, unknown>;
   raw: unknown;
 };
@@ -180,6 +181,9 @@ export async function verifyPaystackTransaction(
     status?: unknown;
     amount?: unknown;
     currency?: unknown;
+    customer?: {
+      email?: unknown;
+    };
     metadata?: unknown;
   }>(raw);
 
@@ -192,6 +196,8 @@ export async function verifyPaystackTransaction(
         ? data.amount
         : 0,
     currency: typeof data.currency === "string" ? data.currency : null,
+    customerEmail:
+      typeof data.customer?.email === "string" ? data.customer.email : null,
     metadata:
       data.metadata && typeof data.metadata === "object"
         ? (data.metadata as Record<string, unknown>)

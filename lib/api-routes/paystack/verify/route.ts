@@ -20,6 +20,19 @@ function resolveReportIdFromMetadata(metadata: Record<string, unknown>): string 
   return trimmed ? trimmed : null;
 }
 
+function resolvePayerEmail(
+  verificationEmail: string | null,
+  metadata: Record<string, unknown>,
+): string | null {
+  if (verificationEmail) {
+    return verificationEmail.trim().toLowerCase();
+  }
+
+  return typeof metadata.payerEmail === "string"
+    ? metadata.payerEmail.trim().toLowerCase()
+    : null;
+}
+
 function resultRedirectUrl(
   request: NextRequest,
   reportId: string,
@@ -76,6 +89,7 @@ export async function GET(request: NextRequest) {
           typeof verification.metadata.userId === "string"
             ? verification.metadata.userId
             : report.userId ?? null,
+        email: resolvePayerEmail(verification.customerEmail, verification.metadata),
         amountKobo: verification.amountKobo || expectedAmountKobo,
         currency: verification.currency ?? "ZAR",
         status: "failed",
@@ -96,6 +110,7 @@ export async function GET(request: NextRequest) {
         typeof verification.metadata.userId === "string"
           ? verification.metadata.userId
           : report.userId ?? null,
+      email: resolvePayerEmail(verification.customerEmail, verification.metadata),
       amountKobo: verification.amountKobo || expectedAmountKobo,
       currency: verification.currency ?? "ZAR",
       status: "success",

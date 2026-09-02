@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthMagicLinkForm } from "@/components/AuthMagicLinkForm";
 import { AuthStatus } from "@/components/AuthStatus";
+import { ClaimPaidReports } from "@/components/ClaimPaidReports";
 import { clearAuthSession, getAccessToken } from "@/lib/clientAuth";
 import type { ReportAccess } from "@/lib/types";
 
@@ -24,8 +25,7 @@ export default function MyReportsPage() {
   const [error, setError] = useState("");
   const [isAuthed, setIsAuthed] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
+  async function loadReports() {
       const token = getAccessToken();
       if (!token) {
         setIsAuthed(false);
@@ -66,7 +66,10 @@ export default function MyReportsPage() {
       } finally {
         setIsLoading(false);
       }
-    })();
+  }
+
+  useEffect(() => {
+    void loadReports();
   }, []);
 
   return (
@@ -105,26 +108,29 @@ export default function MyReportsPage() {
 
         {isAuthed ? (
           <section className="rounded-3xl border border-white/12 bg-surface/80 p-6 sm:p-8">
+            <ClaimPaidReports onClaimed={() => void loadReports()} />
+
             {isLoading ? (
-              <p className="text-sm font-semibold text-accent-soft">
+              <p className="mt-5 text-sm font-semibold text-accent-soft">
                 Loading your saved reports...
               </p>
             ) : null}
 
             {!isLoading && error ? (
-              <p className="rounded-xl border border-danger/45 bg-danger/10 px-3 py-2 text-sm text-red-200">
+              <p className="mt-5 rounded-xl border border-danger/45 bg-danger/10 px-3 py-2 text-sm text-red-200">
                 {error}
               </p>
             ) : null}
 
             {!isLoading && !error && reports.length === 0 ? (
-              <p className="text-sm text-muted">
-                No saved reports yet. Roast a site while signed in and it will appear here.
+              <p className="mt-5 text-sm text-muted">
+                No saved reports yet. Roast a site while signed in, or recover a paid
+                guest report above.
               </p>
             ) : null}
 
             {!isLoading && !error && reports.length > 0 ? (
-              <ul className="space-y-3">
+              <ul className="mt-5 space-y-3">
                 {reports.map((report) => (
                   <li
                     key={report.id}

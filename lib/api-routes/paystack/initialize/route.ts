@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         reportId: report.id,
         userId: user?.id ?? report.userId ?? null,
+        payerEmail,
         product: "website_roast_full_report_unlock",
         priceZar: access.priceZar,
       },
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
       providerStatus: "initialized",
       authorizationUrl: checkout.authorizationUrl,
       metadata: {
+        payerEmail,
         product: "website_roast_full_report_unlock",
         priceZar: access.priceZar,
       },

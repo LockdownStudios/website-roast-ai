@@ -140,6 +140,10 @@ export function UnlockFullReport({ reportId, priceZar }: UnlockFullReportProps) 
             <p className="mt-2 text-[11px] leading-5 text-muted">
               Secure checkout powered by Paystack. The full report unlocks after
               payment is verified.
+              {" "}
+              <a href="/recover" className="font-semibold text-accent-soft underline">
+                Already paid? Recover it here.
+              </a>
             </p>
             {error ? (
               <p className="mt-3 rounded-xl border border-danger/45 bg-danger/10 px-3 py-2 text-sm text-red-200">

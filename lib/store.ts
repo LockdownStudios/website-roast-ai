@@ -34,13 +34,19 @@ import type {
 } from "./types";
 import {
   findRoastReportByUrlAndHashFromSupabase,
+  getRecoverableReportIdsByEmailFromSupabase,
   getRoastReportsByUserIdFromSupabase,
   getRoastReportByIdFromSupabase,
   isSupabaseConfigured,
   saveRoastReportToSupabase,
 } from "./supabase";
 import { normalizeRoastAccess } from "./reportAccess";
-import { createUnlockedAccess, getRoastAccess, withRoastAccess } from "./reportAccess";
+import {
+  createUnlockedAccess,
+  getRoastAccess,
+  isRoastUnlocked,
+  withRoastAccess,
+} from "./reportAccess";
 
 type RoastStoreFile = {
   reports: StoredRoastReport[];
@@ -1048,4 +1054,50 @@ export async function unlockRoastResult(
     source,
   });
   return unlocked;
+}
+
+export type ClaimPaidRoastResultsSummary = {
+  claimed: number;
+  alreadyOwned: number;
+  skipped: number;
+  reportIds: string[];
+};
+
+export async function claimPaidRoastResultsByEmail(
+  userId: string,
+  email: string,
+): Promise<ClaimPaidRoastResultsSummary> {
+  const reportIds =
+    (await getRecoverableReportIdsByEmailFromSupabase(email, 100)) ?? [];
+  const summary: ClaimPaidRoastResultsSummary = {
+    claimed: 0,
+    alreadyOwned: 0,
+    skipped: 0,
+    reportIds: [],
+  };
+
+  for (const reportId of reportIds) {
+    const report = await getRoastResult(reportId);
+    if (!report || !isRoastUnlocked(report.roast)) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    if (report.userId === userId) {
+      summary.alreadyOwned += 1;
+      summary.reportIds.push(report.id);
+      continue;
+    }
+
+    if (report.userId) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    await saveRoastResult({ ...report, userId });
+    summary.claimed += 1;
+    summary.reportIds.push(report.id);
+  }
+
+  return summary;
 }
