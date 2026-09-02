@@ -39,6 +39,8 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&ndash;/gi, "-")
+    .replace(/&mdash;/gi, "-")
     .replace(/&quot;/gi, '"')
     .replace(/&apos;/gi, "'")
     .replace(/&#39;/gi, "'")
@@ -75,7 +77,7 @@ function preferredCtaForSite(
   }
 
   const detected = scraped?.ctas.find((cta) =>
-    /\b(?:quote|consultation|appointment|call|contact|estimate|book|request)\b/i.test(cta),
+    /\b(?:shop|cart|checkout|buy|order|quote|consultation|appointment|call|contact|estimate|book|request)\b/i.test(cta),
   );
 
   return detected ? cleanReportText(detected) : "Request a Quote";
@@ -83,6 +85,10 @@ function preferredCtaForSite(
 
 function isMobileGameContext(scraped: ScrapedWebsiteData | undefined): boolean {
   return scraped ? inferSiteNiche(scraped) === "mobile_game" : false;
+}
+
+function isEcommerceContext(scraped: ScrapedWebsiteData | undefined): boolean {
+  return scraped ? inferSiteNiche(scraped) === "ecommerce" : false;
 }
 
 function scrubCrossSiteContamination(
@@ -110,6 +116,26 @@ function scrubCrossSiteContamination(
       .replace(/\bapp-store\b/gi, "trust")
       .replace(/\bapp store\b/gi, "trust")
       .replace(/\bgoogle play\b/gi, "trust");
+  }
+
+  if (isEcommerceContext(options.scraped)) {
+    const cta = preferredCtaForSite(options.scraped, options.scoring);
+    cleaned = cleaned
+      .replace(/\bRequest a Quote\b/gi, cta)
+      .replace(/\brequest a quote\b/gi, cta.toLowerCase())
+      .replace(/\bquote ask\b/gi, "buying path")
+      .replace(/\bquote path\b/gi, "buying path")
+      .replace(/\benquir(?:y|ies)\b/gi, "purchase intent")
+      .replace(/\bqualified leads\b/gi, "qualified buyers")
+      .replace(/\blead quality\b/gi, "buyer confidence")
+      .replace(/\bleads\b/gi, "buyers")
+      .replace(/\bcompleted-work proof cards?\b/gi, "product proof cards")
+      .replace(/\bcompleted-work proof\b/gi, "product proof")
+      .replace(/\bproject photos?\b/gi, "product photos")
+      .replace(/\bservice buyers?\b/gi, "product buyers")
+      .replace(/\bservice list\b/gi, "product catalogue")
+      .replace(/\bservice in\b/gi, "product range in")
+      .replace(/\bsite visit\b/gi, "product selection help");
   }
 
   for (const exclusion of options.scraped?.siteFacts?.exclusions ?? []) {
@@ -199,6 +225,7 @@ function sanitizeSiteFacts(siteFacts: SiteFacts | undefined): SiteFacts | undefi
       ? cleanReportText(siteFacts.companyName)
       : undefined,
     services: cleanFactList(siteFacts.services),
+    productCategories: cleanFactList(siteFacts.productCategories ?? []),
     exclusions: cleanFactList(siteFacts.exclusions ?? []),
     locations: cleanFactList(siteFacts.locations),
     contacts: cleanFactList(siteFacts.contacts),

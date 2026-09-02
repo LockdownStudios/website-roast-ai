@@ -256,6 +256,7 @@ function normalizeSiteFacts(value: unknown): SiteFacts | undefined {
         ? raw.companyName.trim().slice(0, 120)
         : undefined,
     services: normalizeSiteFactList(raw.services, 12),
+    productCategories: normalizeSiteFactList(raw.productCategories, 14),
     exclusions: normalizeSiteFactList(raw.exclusions, 10),
     locations: normalizeSiteFactList(raw.locations, 10),
     contacts: normalizeSiteFactList(raw.contacts, 8),
@@ -268,6 +269,7 @@ function normalizeSiteFacts(value: unknown): SiteFacts | undefined {
   const hasFacts =
     Boolean(facts.companyName) ||
     facts.services.length > 0 ||
+    (facts.productCategories?.length ?? 0) > 0 ||
     (facts.exclusions?.length ?? 0) > 0 ||
     facts.locations.length > 0 ||
     facts.contacts.length > 0 ||

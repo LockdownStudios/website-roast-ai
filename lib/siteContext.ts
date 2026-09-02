@@ -17,6 +17,7 @@ export type SiteContextSnapshot = {
   nicheLabel: string;
   companyName?: string;
   services: string[];
+  productCategories: string[];
   exclusions: string[];
   locations: string[];
   pagesReviewed: string[];
@@ -84,6 +85,21 @@ const NICHE_RULES: NicheRule[] = [
       "wishlist",
       "new arrivals",
       "best sellers",
+      "shop our products",
+      "product menu",
+      "product categories",
+      "products by brand",
+      "all prices include vat",
+      "currency",
+      "login / signup",
+      "my account",
+      "specials",
+      "clearance",
+      "solar inverters",
+      "solar panels",
+      "batteries",
+      "solar system kits",
+      "all products",
     ],
   },
   {
@@ -353,6 +369,8 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&ndash;/gi, "-")
+    .replace(/&mdash;/gi, "-")
     .replace(/&quot;/gi, '"')
     .replace(/&apos;/gi, "'")
     .replace(/&#39;/gi, "'")
@@ -413,20 +431,42 @@ function pickPrimaryCta(scraped: ScrapedWebsiteData): string {
 }
 
 function pickOfferHeadline(scraped: ScrapedWebsiteData): string {
-  const fromH1 = scraped.headings.h1.find((item) => normalizeWhitespace(item).length >= 6);
+  const fromTitle = normalizeWhitespace(scraped.title);
+  const productCategoryCount = scraped.siteFacts?.productCategories?.length ?? 0;
+
+  if (
+    productCategoryCount >= 2 &&
+    fromTitle &&
+    fromTitle !== "No title found." &&
+    !isUtilityHeading(fromTitle)
+  ) {
+    return truncateAtWord(fromTitle, 120);
+  }
+
+  const fromH1 = scraped.headings.h1.find((item) => {
+    const cleaned = normalizeWhitespace(item);
+    return cleaned.length >= 6 && !isUtilityHeading(cleaned);
+  });
   if (fromH1) {
     return truncateAtWord(fromH1, 120);
   }
-  const fromTitle = normalizeWhitespace(scraped.title);
+
   if (fromTitle && fromTitle !== "No title found.") {
     return truncateAtWord(fromTitle, 120);
   }
   return "No clear offer headline detected";
 }
 
+function isUtilityHeading(value: string): boolean {
+  return /\b(login|log in|my account|create my account|recover password|lost password|cart is empty|checkout|contact us|get in touch)\b/i.test(
+    value,
+  );
+}
+
 export function inferSiteNiche(scraped: ScrapedWebsiteData): SiteNiche {
   const corpus = corpusFromScraped(scraped);
   const ctaCorpus = scraped.ctas.join(" ").toLowerCase();
+  const productCategoryCount = scraped.siteFacts?.productCategories?.length ?? 0;
   const scores = Object.fromEntries(
     NICHE_RULES.map((rule) => [rule.niche, 0]),
   ) as Record<SiteNiche, number>;
@@ -468,10 +508,14 @@ export function inferSiteNiche(scraped: ScrapedWebsiteData): SiteNiche {
     return "saas";
   }
 
+  if (ecommerceIntent >= 5 && productCategoryCount >= 2) {
+    return "ecommerce";
+  }
+
   if (
     scores.ecommerce >= 2 &&
     ecommerceIntent >= 3 &&
-    ecommerceIntent >= serviceIntent + 1
+    (ecommerceIntent >= serviceIntent + 1 || productCategoryCount >= 2)
   ) {
     return "ecommerce";
   }
@@ -518,6 +562,24 @@ const ECOMMERCE_INTENT_SIGNALS = [
   "best sellers",
   "limited stock",
   "quantity",
+  "shop our products",
+  "product menu",
+  "product categories",
+  "products by brand",
+  "all prices include vat",
+  "login / signup",
+  "my account",
+  "currency",
+  "zar",
+  "secure payments",
+  "eft",
+  "all products",
+  "solar inverters",
+  "solar panels",
+  "batteries",
+  "solar system kits",
+  "specials",
+  "clearance",
 ];
 
 const SERVICE_INTENT_SIGNALS = [
@@ -539,7 +601,6 @@ const SERVICE_INTENT_SIGNALS = [
   "contractor",
   "construction",
   "building",
-  "solar",
   "cctv",
   "security",
   "dentist",
@@ -555,7 +616,7 @@ function keywordHitCount(corpus: string, keywords: string[]): number {
 
 function ctaStrength(cta: string): number {
   const lower = cta.toLowerCase();
-  if (/\b(add to cart|checkout|buy now|shop now)\b/.test(lower)) return 100;
+  if (/\b(add to cart|checkout|buy now|shop now|shop our products|view product range)\b/.test(lower)) return 100;
   if (/\b(get|request)\s+(a\s+)?quote\b|\bbook\b|\bschedule\b|\bconsultation\b/.test(lower)) return 96;
   if (/\b(call now|call us|whatsapp|talk to us|speak to)\b/.test(lower)) return 82;
   if (/\b(contact us|contact|get in touch|send message)\b/.test(lower)) return 42;
@@ -566,7 +627,7 @@ function ctaStrength(cta: string): number {
 function ecommerceIntentScore(corpus: string, ctaCorpus: string): number {
   return (
     keywordHitCount(corpus, ECOMMERCE_INTENT_SIGNALS) +
-    keywordHitCount(ctaCorpus, ["add to cart", "checkout", "buy now", "shop now"]) * 2
+    keywordHitCount(ctaCorpus, ["add to cart", "checkout", "buy now", "shop now", "shop our products", "view product range"]) * 2
   );
 }
 
@@ -619,6 +680,7 @@ export function buildSiteContextSnapshot(
     nicheLabel: nicheLabelFromType(niche),
     companyName: scraped.siteFacts?.companyName,
     services: siteFactValues(scraped.siteFacts?.services, 6),
+    productCategories: siteFactValues(scraped.siteFacts?.productCategories, 8),
     exclusions: siteFactValues(scraped.siteFacts?.exclusions, 6),
     locations: siteFactValues(scraped.siteFacts?.locations, 5),
     pagesReviewed: siteFactValues(scraped.siteFacts?.pagesReviewed, 8),
@@ -641,6 +703,7 @@ export function extractSourceAnchors(scraped: ScrapedWebsiteData): string[] {
     scraped.trustSignals[0] ?? "",
     scraped.contactSignals[0] ?? "",
     ...(scraped.siteFacts?.services ?? []).map((fact) => fact.value),
+    ...(scraped.siteFacts?.productCategories ?? []).map((fact) => fact.value),
     ...(scraped.siteFacts?.exclusions ?? []).map((fact) => `Does not offer ${fact.value}`),
     ...(scraped.siteFacts?.locations ?? []).map((fact) => fact.value),
     ...(scraped.siteFacts?.copyIssues ?? []).map((fact) => fact.value),

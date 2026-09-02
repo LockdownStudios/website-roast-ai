@@ -65,6 +65,18 @@ const SERVICE_PATTERNS: PatternFact[] = [
   { value: "Marketing", pattern: /\b(?:marketing|paid media|advertising)\b/i },
 ];
 
+const PRODUCT_CATEGORY_PATTERNS: PatternFact[] = [
+  { value: "Solar inverters", pattern: /\bsolar inverters?\b|\ball inverters?\b|\bhybrid inverters?\b|\bgrid tie\b|\boff[-\s]?grid\b/i },
+  { value: "Solar panels", pattern: /\bsolar panels?\b|\bjinko\b|\blongi\b|\bseraphim\b/i },
+  { value: "Batteries", pattern: /\bbatteries\b|\blithium\b|\bagm\b|\bgel\b|\bbattery storage\b|\bbattery cable\b|\bbattery fusing\b/i },
+  { value: "Solar system kits", pattern: /\bsolar system kits?\b|\bsolar kits?\b|\bvictron solar kits?\b|\bluxpower solar kits?\b|\bsolis kits?\b/i },
+  { value: "Solar accessories", pattern: /\bsolar accessories\b|\bcables? and connectors?\b|\bfuses?\b|\bdc isolators?\b|\bsolar tools?\b|\bmc4\b/i },
+  { value: "Solar mounting systems", pattern: /\bsolar (?:panel )?mounting systems?\b|\brenusol\b|\bplas-sol\b|\beco mounting\b/i },
+  { value: "Victron Energy products", pattern: /\bvictron(?: energy)?\b|\bvictron all products\b|\bvictron charge controllers?\b/i },
+  { value: "Camping power supplies", pattern: /\bcamping\b|\bpower supplies\b/i },
+  { value: "Specials and clearance", pattern: /\bspecials\b|\bclearance\b|\blimited stock\b|\bsale\b/i },
+];
+
 const LOCATION_PATTERNS: PatternFact[] = [
   { value: "Gauteng", pattern: /\bgauteng\b/i },
   { value: "Johannesburg", pattern: /\bjohannesburg\b/i },
@@ -125,7 +137,15 @@ const EXCLUSION_RULES: ExclusionRule[] = [
 ];
 
 function cleanText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&ndash;/gi, "-")
+    .replace(/&mdash;/gi, "-")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeKey(value: string): string {
@@ -321,9 +341,21 @@ function pagesReviewedFacts(scraped: ScrapedWebsiteData): SiteFactEvidence[] {
         ];
 
   return pages.slice(0, 8).map((page) => {
-    const title = cleanText(page.primaryHeading || page.title || visibleUrl(page.url));
+    const primaryHeading = cleanText(page.primaryHeading ?? "");
+    const title = cleanText(
+      primaryHeading && !/\b(login|log in|my account|create my account|recover password|lost password|cart is empty|checkout|contact us|get in touch)\b/i.test(primaryHeading)
+        ? primaryHeading
+        : page.title || visibleUrl(page.url),
+    );
+    const label =
+      page.role === "services" &&
+      /\b(product|connector|battery|victron|renusol|inverter|panel|fuse|isolator|mppt|kit)\b/i.test(
+        `${page.url} ${title}`,
+      )
+        ? "Product"
+        : roleLabel(page.role);
     return {
-      value: `${roleLabel(page.role)}: ${title}`,
+      value: `${label}: ${title}`,
       sourceUrl: page.url,
       sourceRole: page.role,
     };
@@ -395,6 +427,7 @@ export function buildSiteFacts(scraped: ScrapedWebsiteData): SiteFacts {
   return {
     companyName: companyName(scraped),
     services: factsFromPatterns(scraped, SERVICE_PATTERNS, 10, excludedValues),
+    productCategories: factsFromPatterns(scraped, PRODUCT_CATEGORY_PATTERNS, 12),
     exclusions,
     locations: factsFromPatterns(scraped, LOCATION_PATTERNS, 8),
     contacts: signalFacts(scraped.contactSignals, fallbackSource, 6),

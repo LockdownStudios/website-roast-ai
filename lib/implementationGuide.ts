@@ -45,6 +45,7 @@ type GuideContext = {
   outcome: string;
   companyName?: string;
   services: string[];
+  productCategories: string[];
   locations: string[];
   pagesReviewed: string[];
   copyIssues: string[];
@@ -95,8 +96,8 @@ const NICHE_DEFAULTS: Record<SiteNiche, NicheDefaults> = {
   },
   ecommerce: {
     audience: "high-intent shoppers",
-    outcome: "buy with confidence in one visit",
-    fallbackCta: "Shop Now",
+    outcome: "find the right product and buy with confidence in one visit",
+    fallbackCta: "View Product Range",
   },
   local_service: {
     audience: "homeowners and local buyers",
@@ -154,6 +155,9 @@ function missingSignal(value: string): boolean {
 function proofPhrase(context: GuideContext): string {
   if (context.niche === "mobile_game" && missingSignal(context.trustSnapshot)) {
     return "no gameplay trailer, app-store proof, player/community numbers, reviews, or launch credibility near the pitch";
+  }
+  if (context.niche === "ecommerce" && missingSignal(context.trustSnapshot)) {
+    return "no product reviews, stock clarity, delivery reassurance, warranty/OEM support, brand proof, or secure-payment confidence near the buying path";
   }
 
   return missingSignal(context.trustSnapshot)
@@ -216,6 +220,27 @@ function serviceLabelFromFacts(services: string[], fallback: string): string {
   return cleanedFallback ? cleanedFallback.toLowerCase() : "local service";
 }
 
+function productLabelFromFacts(productCategories: string[], fallback: string): string {
+  const joined = humanJoin(productCategories, 2);
+  if (joined) {
+    return joined.toLowerCase();
+  }
+
+  const cleanedFallback = shortOffer(fallback.replace(/[:|].*$/, ""), 42)
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .trim();
+  return cleanedFallback ? cleanedFallback.toLowerCase() : "product range";
+}
+
+function ecommerceCtaFromProducts(productCategories: string[]): string {
+  const joined = productCategories.join(" ").toLowerCase();
+  if (/\bsolar system kits?\b|\bsolar kits?\b/.test(joined)) return "Shop Solar Kits";
+  if (/\bsolar inverters?\b|\binverters?\b/.test(joined)) return "Shop Inverters";
+  if (/\bbatteries\b|\blithium\b/.test(joined)) return "Shop Batteries";
+  if (/\bsolar panels?\b/.test(joined)) return "Shop Solar Panels";
+  return "View Product Range";
+}
+
 function locationLabelFromFacts(locations: string[]): string {
   const preferred = locations.find(
     (location) => !/^south africa$/i.test(location) && !/^gauteng$/i.test(location),
@@ -236,7 +261,7 @@ function weakOrMismatchedCtaForNiche(
 
   switch (niche) {
     case "ecommerce":
-      return !/\b(add to cart|checkout|buy now|shop now|shop|order now)\b/.test(normalized);
+      return !/\b(add to cart|checkout|buy now|shop now|shop|shop our products|view product range|order now)\b/.test(normalized);
     case "local_service":
       return !/\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(normalized);
     case "professional_service":
@@ -258,10 +283,15 @@ function ctaRecommendation(
   detectedCta: string | undefined,
   niche: SiteNiche,
   defaults: NicheDefaults,
+  productCategories: string[] = [],
 ): { label: string; source: "detected" | "recommended"; reason: string } {
+  const fallbackCta = niche === "ecommerce"
+    ? ecommerceCtaFromProducts(productCategories)
+    : defaults.fallbackCta;
+
   if (!detectedCta) {
     return {
-      label: defaults.fallbackCta,
+      label: fallbackCta,
       source: "recommended",
       reason: "the page does not expose a clear next step",
     };
@@ -269,7 +299,7 @@ function ctaRecommendation(
 
   if (weakOrMismatchedCtaForNiche(detectedCta, niche)) {
     return {
-      label: defaults.fallbackCta,
+      label: fallbackCta,
       source: "recommended",
       reason:
         niche === "mobile_game"
@@ -299,7 +329,12 @@ function makeContext(
   const detectedPrimaryCta = primaryCtaWasDetected
     ? toTitleCase(snapshot.primaryCta)
     : undefined;
-  const recommended = ctaRecommendation(detectedPrimaryCta, niche, defaults);
+  const recommended = ctaRecommendation(
+    detectedPrimaryCta,
+    niche,
+    defaults,
+    snapshot.productCategories,
+  );
 
   return {
     scraped,
@@ -308,10 +343,14 @@ function makeContext(
     nicheLabel: snapshot.nicheLabel,
     companyName: snapshot.companyName,
     services: snapshot.services,
+    productCategories: snapshot.productCategories,
     locations: snapshot.locations,
     pagesReviewed: snapshot.pagesReviewed,
     copyIssues: snapshot.copyIssues,
-    serviceLabel: serviceLabelFromFacts(snapshot.services, snapshot.offerHeadline),
+    serviceLabel:
+      niche === "ecommerce"
+        ? productLabelFromFacts(snapshot.productCategories, snapshot.offerHeadline)
+        : serviceLabelFromFacts(snapshot.services, snapshot.offerHeadline),
     locationLabel: locationLabelFromFacts(snapshot.locations),
     offerLabel: snapshot.offerHeadline,
     audience: defaults.audience,
@@ -368,7 +407,7 @@ function headlineExampleForContext(context: GuideContext): string {
     case "creative_agency":
       return `Launch a sharper website with a clear plan, proof, and next step`;
     case "ecommerce":
-      return `Shop the right product faster, with proof and fewer doubts`;
+      return `Shop ${context.serviceLabel} faster, with proof and fewer doubts`;
     case "saas":
       return `Book a demo and see the workflow improvement in one session`;
     default:
@@ -491,6 +530,7 @@ function baseObservationLines(context: GuideContext): string[] {
   const visuals = context.scraped.visualAudit?.summary;
   const pagesReviewed = context.pagesReviewed.slice(0, 5);
   const services = context.services.slice(0, 5);
+  const products = context.productCategories.slice(0, 6);
   const locations = context.locations.slice(0, 4);
   const copyIssues = context.copyIssues.slice(0, 3);
 
@@ -498,7 +538,11 @@ function baseObservationLines(context: GuideContext): string[] {
     `Detected niche: ${context.nicheLabel}.`,
     context.companyName ? `Company name signal: ${context.companyName}.` : "",
     pagesReviewed.length > 1 ? `Pages reviewed: ${pagesReviewed.join(" | ")}.` : "",
-    services.length > 0 ? `Service signals: ${services.join(" | ")}.` : "",
+    context.niche === "ecommerce" && products.length > 0
+      ? `Product signals: ${products.join(" | ")}.`
+      : services.length > 0
+        ? `Service signals: ${services.join(" | ")}.`
+        : "",
     locations.length > 0 ? `Location signals: ${locations.join(" | ")}.` : "",
     `Current headline snapshot: "${h1}".`,
     context.primaryCtaWasDetected
@@ -513,7 +557,9 @@ function baseObservationLines(context: GuideContext): string[] {
       ? `Trust signals found: ${trust.join(" | ")}`
       : context.niche === "mobile_game"
         ? "The visible copy does not show app-store badges, player/community proof, reviews, gameplay trailer proof, or launch credibility near the main action."
-        : "The visible copy does not show testimonials, reviews, credentials, client results, or other proof.",
+        : context.niche === "ecommerce"
+          ? "The visible copy does not show enough product reviews, warranty cues, stock clarity, delivery reassurance, brand proof, or payment confidence near the main buying path."
+          : "The visible copy does not show testimonials, reviews, credentials, client results, or other proof.",
     contacts.length > 0
       ? `Contact path signals: ${contacts.join(" | ")}`
       : "No obvious email, phone, booking route, or direct contact path appears in the core copy.",
@@ -694,11 +740,15 @@ function fixFromPenalty(
         title:
           context.niche === "mobile_game"
             ? `Show player proof under "${shortOffer(context.offerLabel, 48)}"`
+            : context.niche === "ecommerce"
+              ? `Show product proof under "${shortOffer(context.offerLabel, 48)}"`
             : `Put real proof under "${shortOffer(context.offerLabel, 48)}"`,
         where: "Directly below hero and near first CTA",
         why:
           context.niche === "mobile_game"
             ? "Players need to see why this game is worth installing before they give it phone space."
+            : context.niche === "ecommerce"
+              ? "Shoppers need proof around stock, support, warranty, delivery, and payment safety before they trust the cart."
             : "Without visible proof, skeptical buyers bounce before they read deeper sections.",
         how:
           context.niche === "mobile_game"
@@ -707,6 +757,12 @@ function fixFromPenalty(
                 "Show a gameplay trailer, live match screenshots, or ranked-mode preview.",
                 "Add community proof: player count, tournament partners, Discord/community size, or review snippets.",
               ]
+            : context.niche === "ecommerce"
+              ? [
+                  "Add review snippets or verified buyer ratings near key product categories.",
+                  "Show stock, warranty/OEM support, delivery coverage, returns, and payment security close to product cards.",
+                  "Make brand trust visible before the first product CTA instead of hiding it in the footer.",
+                ]
             : [
                 "Add one testimonial with buyer type and measurable result.",
                 "Add one credibility strip: years, client count, credential, or compliance marker.",
@@ -715,6 +771,8 @@ function fixFromPenalty(
         example:
           context.niche === "mobile_game"
             ? 'Proof strip: "Gameplay trailer | Live match screenshots | Join the launch list | Google Play / App Store badges"'
+            : context.niche === "ecommerce"
+              ? 'Proof strip: "In-stock ranges | OEM support | Nationwide delivery | Secure online payments | Verified reviews"'
             : 'Proof strip: "[X+ clients served] | [Years experience] | [Measured result from real client case]"',
       };
     case "No Contact Path":
@@ -816,11 +874,15 @@ function fallbackFixForCategory(
         title:
           context.niche === "mobile_game"
             ? "Build an install-confidence stack near the first CTA"
+            : context.niche === "ecommerce"
+              ? "Build a product-confidence stack near the first CTA"
             : "Build a trust stack near the first CTA",
         where: "Hero-to-offer transition block",
         why:
           context.niche === "mobile_game"
             ? "Download intent needs confidence before the app-store click, not vague hype after it."
+            : context.niche === "ecommerce"
+              ? "Purchase intent needs product confidence before shoppers commit to category browsing or checkout."
             : "Trust must appear before commitment asks, not after long scrolling.",
         how:
           context.niche === "mobile_game"
@@ -829,6 +891,12 @@ function fallbackFixForCategory(
                 "Add community, tournament, rating, or launch-list proof.",
                 "Make platform availability obvious: iOS, Android, or coming-soon status.",
               ]
+            : context.niche === "ecommerce"
+              ? [
+                  "Show verified reviews or buyer ratings near high-intent categories.",
+                  "Add stock, warranty/OEM support, delivery, returns, and secure-payment cues near product cards.",
+                  "Use brand badges or product comparison notes to reduce choice friction.",
+                ]
             : [
                 "Add one client story with measurable outcome.",
                 "Add credential/compliance/experience proof.",
@@ -837,6 +905,8 @@ function fallbackFixForCategory(
         example:
           context.niche === "mobile_game"
             ? 'Install proof: "Available for Android/iOS | Gameplay trailer | Ranked league preview | Community updates"'
+            : context.niche === "ecommerce"
+              ? 'Product confidence: "In stock | OEM support | Nationwide delivery | Secure payments | Verified reviews"'
             : 'Trust stack: "[X+ clients] | [Years experience] | [Credential] | [Result snippet]"',
       };
     case "CTA":
@@ -946,6 +1016,25 @@ function siteSpecificFixes(context: GuideContext): FixBlueprintItem[] {
     });
   }
 
+  if (context.niche === "ecommerce") {
+    const productLabel = context.serviceLabel || "products";
+    fixes.push({
+      title: "Turn product browsing into a clear buying path",
+      where: "Homepage hero, product menu, category cards, and product listing pages",
+      why:
+        `${context.nicheLabel} buyers need fast product choice, price confidence, and purchase reassurance before they open the cart.`,
+      how: [
+        `Lead with the strongest category path for ${productLabel}.`,
+        "Show stock, VAT/pricing clarity, delivery, warranty/OEM support, and payment reassurance near the first product CTA.",
+        "Use category tiles and product cards that compare the buyer's likely options instead of pushing them through a flat menu.",
+      ],
+      example:
+        `Path: "${context.primaryCta}" -> category tiles -> top products with price, stock, warranty, delivery, and support cues.`,
+      impact: "High",
+      effort: "Medium",
+    });
+  }
+
   if (context.scraped.headings.h1.length === 0) {
     fixes.push({
       title: "Add one real H1 that says what the page sells",
@@ -989,6 +1078,17 @@ function structureOrder(context: GuideContext): string[] {
       "Install confidence: platform badges, launch timing, reviews, or community proof",
       "Objection handling: device availability, cost, launch status, and game modes",
       `Final CTA: repeat "${context.primaryCta}" with platform/download cue`,
+    ];
+  }
+
+  if (context.niche === "ecommerce") {
+    return [
+      `Hero: product promise + CTA "${context.primaryCta}"`,
+      "Category chooser: strongest product groups with buyer-friendly labels",
+      "Product proof: brands, reviews, warranties, stock, delivery, and secure payment",
+      "Comparison help: best sellers, use cases, compatibility, and buying guidance",
+      "Objection handling: delivery, returns, support, installation, and payment FAQ",
+      `Final CTA: repeat "${context.primaryCta}" with help-choosing reassurance`,
     ];
   }
 

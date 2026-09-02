@@ -455,6 +455,67 @@ export const benchmarkCases: BenchmarkCase[] = [
     }),
   },
   {
+    id: "solar-product-store",
+    label: "Solar ecommerce catalogue with product categories",
+    expectedScoreRange: [4.0, 7.2],
+    mustFlag: ["differentiation"],
+    scraped: buildScraped({
+      url: "https://solar-store.test",
+      title: "Solar Solutions and Products for Residential & Commercial",
+      description:
+        "Shop solar inverters, solar panels, batteries, solar system kits, and accessories online.",
+      headings: {
+        h1: ["Login to my account"],
+        h2: ["Product Categories", "Popular Brands"],
+      },
+      content:
+        "All Prices Include VAT. Currency ZAR USD GBP. Login / Signup. 0 Cart. Shop our products. " +
+        "Products by Brand. Solar Inverters by Type. Solar Panels. Batteries. Victron Energy. " +
+        "Solar Accessories. Solar Panel Mounting Systems. Solar System Kits. Specials. Clearance. " +
+        "Delivery nation wide. Quality Trusted Products. Full in country OEM support. EFT or Secure on-line payments.",
+      ctas: ["shop our products", "contact us", "call us"],
+      trustSignals: [
+        "quality trusted products",
+        "full in country OEM support",
+        "secure payments",
+      ],
+      contactSignals: ["Call us +27 10 500 1019", "sales@example.test"],
+      siteFacts: {
+        companyName: "Solar Store",
+        services: [{ value: "Solar" }],
+        productCategories: [
+          { value: "Solar inverters" },
+          { value: "Solar panels" },
+          { value: "Batteries" },
+          { value: "Solar system kits" },
+          { value: "Solar accessories" },
+        ],
+        locations: [{ value: "South Africa" }],
+        contacts: [{ value: "sales@example.test" }],
+        ctas: [{ value: "shop our products" }, { value: "contact us" }],
+        trustSignals: [
+          { value: "quality trusted products" },
+          { value: "full in country OEM support" },
+          { value: "secure payments" },
+        ],
+        pagesReviewed: [
+          { value: "Home: Login to my account" },
+          { value: "Services: Solar Connector MC4 Crimping Tool" },
+          { value: "Services: Battery Disconnect Mersen 2P-160A" },
+        ],
+        copyIssues: [],
+      },
+      visualHints: {
+        aboveFoldCtaLikely: true,
+        heroHeadingEarly: false,
+        formAboveFoldLikely: false,
+        trustTokenAboveFold: true,
+        buttonCount: 6,
+        linkCount: 80,
+      },
+    }),
+  },
+  {
     id: "saas-no-pricing",
     label: "SaaS with good copy but weak buying confidence",
     expectedScoreRange: [4.5, 7.0],

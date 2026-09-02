@@ -61,7 +61,7 @@ function classifyCtaSignal(signal: string): "strong" | "weak" | "none" {
   const lower = signal.toLowerCase();
 
   if (
-    /\b(get (a )?quote|request (a )?quote|book|schedule|start|sign up|apply|trial|buy now|shop now|call now|call us|request demo|book a demo|consultation)\b/.test(
+    /\b(get (a )?quote|request (a )?quote|book|schedule|start|sign up|apply|trial|buy now|shop now|shop our products|view product range|call now|call us|request demo|book a demo|consultation)\b/.test(
       lower,
     )
   ) {
@@ -148,7 +148,7 @@ function expectedCtaLabel(niche: string): string {
     case "saas":
       return "Book a Demo";
     case "ecommerce":
-      return "Shop Now";
+      return "View Product Range";
     default:
       return "Book a Consultation";
   }
@@ -158,7 +158,7 @@ function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
   const lower = signal.toLowerCase();
   switch (goal) {
     case "commerce":
-      return /\b(add to cart|checkout|buy now|shop now|shop|order now)\b/.test(lower);
+      return /\b(add to cart|checkout|buy now|shop now|shop|shop our products|view product range|order now)\b/.test(lower);
     case "quote":
       return /\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(lower);
     case "booking":
@@ -196,6 +196,9 @@ function countUniqueLongTerms(content: string): number {
 
 function hasMeaningfulH1(h1List: string[]): boolean {
   return h1List.some((h1) => {
+    if (/\b(login|log in|my account|create my account|recover password|lost password|cart is empty|checkout)\b/i.test(h1)) {
+      return false;
+    }
     const words = h1.trim().split(/\s+/);
     return words.length >= 4 && h1.trim().length >= 22;
   });

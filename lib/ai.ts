@@ -43,6 +43,7 @@ Rules:
 - Output a claim contract that maps key claims to concrete evidence snippets
 - Never recommend "Shop Now" unless the detected niche is Ecommerce and the evidence includes real shopping/cart/checkout intent
 - For local service, professional service, healthcare, and agency sites, recommend quote, booking, consultation, call, or appointment actions
+- For Ecommerce, judge product discovery, category clarity, pricing/VAT clarity, cart/checkout confidence, delivery, returns/warranty, reviews, brand proof, stock clarity, and buyer help. Do not talk about service enquiries, completed-work galleries, site visits, or quote forms unless the evidence says the store also sells services.
 
 Return valid JSON only.`;
 
@@ -402,6 +403,7 @@ function buildSiteEvidenceDossier(
 - Detected niche: ${context.nicheLabel}
 - Company/name signal: ${context.companyName ?? "not detected"}
 - Services found: ${formatFactList(context.services, "no service facts extracted", 6)}
+- Product/category facts found: ${formatFactList(context.productCategories, "no product category facts extracted", 8)}
 - Explicit exclusions / not-offered services: ${formatFactList(context.exclusions, "none detected", 6)}
 - Locations found: ${formatFactList(context.locations, "no location facts extracted", 5)}
 - Copy issue signals: ${formatFactList(context.copyIssues, "no copy issue signals extracted", 5)}
@@ -430,6 +432,7 @@ function siteContextPromptLines(
 - Niche: ${context.nicheLabel}
 - Offer headline: ${context.offerHeadline}
 - Services: ${formatFactList(context.services, "none extracted", 5)}
+- Product/category facts: ${formatFactList(context.productCategories, "none extracted", 8)}
 - Explicit exclusions: ${formatFactList(context.exclusions, "none detected", 5)}
 - Locations: ${formatFactList(context.locations, "none extracted", 4)}
 - Detected CTA snapshot: ${humanSignal(context.primaryCta)}
@@ -545,6 +548,7 @@ Output constraints:
 - each quick_fix should follow this structure: "Where: ... | Fix: ... | Example: ..."
 - If the detected CTA is weak or mismatched for the site goal, do not recommend standardizing it. Recommend the goal-led CTA from the site context instead.
 - Do not recommend "Shop Now" unless the niche is Ecommerce and the evidence shows cart, checkout, buying, or shopping signals. Service businesses need quote/book/call/consultation actions.
+- If Detected niche is Ecommerce, use ecommerce language: shoppers, products, categories, carts, checkout, delivery, warranty, stock, reviews, product cards, buying confidence. Avoid service-lead language such as completed-work proof, quote ask, enquiry quality, or site visits unless that exact service path is visible.
 - Only use mobile-game/app language when Detected niche is Mobile Game and the dossier shows app-store, download, install, gameplay, or player evidence.
 - Never write "Download The App", "mobile players", "mobile game buyers", "install the app", or "start playing" for local service, construction, landscaping, professional service, healthcare, agency, ecommerce, or generic sites.
 - Respect explicit exclusions. If the site says it does not offer a service, never list that service as an offering or recommend it as if it is available.

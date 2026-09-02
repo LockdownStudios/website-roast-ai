@@ -40,6 +40,9 @@ const CTA_PHRASES = [
   "book a demo",
   "buy now",
   "shop now",
+  "shop our products",
+  "view product range",
+  "product menu",
   "view now",
   "learn more",
   "send message",
@@ -661,13 +664,13 @@ function isLikelyCtaAnchorText(text: string): boolean {
   if (isBoilerplateLine(text)) {
     return false;
   }
-  if (isLikelyMenuLine(text) && !/(book|quote|call|consult|demo|apply|contact)/i.test(lower)) {
+  if (isLikelyMenuLine(text) && !/(book|quote|call|consult|demo|apply|contact|shop|cart|checkout|buy|product)/i.test(lower)) {
     return false;
   }
 
   return (
     CTA_PHRASES.some((phrase) => lower.includes(phrase)) ||
-    /\b(book|schedule|quote|call|consult|demo|trial|apply|get started|sign up|contact|talk|speak|explore services|view services)\b/.test(
+    /\b(book|schedule|quote|call|consult|demo|trial|apply|get started|sign up|contact|talk|speak|shop|cart|checkout|buy|order|product menu|shop our products|view product range|explore services|view services)\b/.test(
       lower,
     )
   );
@@ -685,7 +688,7 @@ function ctaPriority(signal: string): number {
   if (/\b(get|request)\s+(a\s+)?quote\b|\bbook\s+(a\s+)?demo\b|\brequest demo\b/.test(lower)) {
     return 98;
   }
-  if (/\b(buy now|shop now|start free trial|start trial|sign up|apply now|get started|start now)\b/.test(lower)) {
+  if (/\b(buy now|shop now|shop our products|view product range|start free trial|start trial|sign up|apply now|get started|start now)\b/.test(lower)) {
     return 92;
   }
   if (/\b(call now|call us|talk to us|speak to an advisor|let'?s chat|lets chat)\b/.test(lower)) {
@@ -711,7 +714,7 @@ function normalizeDetectedCtaSignal(signal: string): string | null {
   }
 
   const genericActionMatch = cleaned.match(
-    /\b(learn more|read more|view services|explore services|contact us|send message|call us)\b/i,
+    /\b(learn more|read more|view services|explore services|contact us|send message|call us|shop our products|view product range|product menu)\b/i,
   );
   if (genericActionMatch && cleaned.length > 40) {
     return genericActionMatch[0].toLowerCase();
@@ -730,7 +733,7 @@ function normalizeDetectedCtaSignal(signal: string): string | null {
   }
 
   const matchedAction = cleaned.match(
-    /\b(book\s+(?:your\s+)?(?:free\s+)?(?:consultation|call)|schedule\s+(?:a\s+)?call|get\s+(?:a\s+)?quote|request\s+(?:a\s+)?quote|book\s+(?:a\s+)?demo|start\s+free\s+trial|get\s+started|sign\s+up|apply\s+now|call\s+us|talk\s+to\s+us|speak\s+to\s+an\s+advisor|send\s+message|contact\s+us|learn\s+more|view\s+services|explore\s+services)\b/i,
+    /\b(book\s+(?:your\s+)?(?:free\s+)?(?:consultation|call)|schedule\s+(?:a\s+)?call|get\s+(?:a\s+)?quote|request\s+(?:a\s+)?quote|book\s+(?:a\s+)?demo|start\s+free\s+trial|get\s+started|sign\s+up|apply\s+now|buy\s+now|shop\s+now|shop\s+our\s+products|view\s+product\s+range|product\s+menu|call\s+us|talk\s+to\s+us|speak\s+to\s+an\s+advisor|send\s+message|contact\s+us|learn\s+more|view\s+services|explore\s+services)\b/i,
   );
 
   return matchedAction ? matchedAction[0].toLowerCase() : cleaned.slice(0, 90);
