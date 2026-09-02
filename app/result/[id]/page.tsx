@@ -93,16 +93,23 @@ export default async function ResultPage({ params, searchParams }: ResultPagePro
         <AuthStatus />
       </div>
       {paymentStatus === "success" ? (
-        <div className="mx-auto mb-6 w-full max-w-5xl rounded-2xl border border-emerald-300/35 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-100">
-          Payment successful. Your full report is now unlocked.
+        <div className="mx-auto mb-6 w-full max-w-5xl rounded-2xl border border-emerald-300/35 bg-emerald-300/10 px-5 py-4 text-sm text-emerald-100">
+          <p className="font-black uppercase tracking-[0.14em]">Payment Verified</p>
+          <p className="mt-1 text-emerald-50/90">
+            Your full report is unlocked. You can download it, share it, or come back to this link.
+          </p>
         </div>
       ) : null}
       {paymentStatus === "failed" ? (
-        <div className="mx-auto mb-6 w-full max-w-5xl rounded-2xl border border-red-300/35 bg-red-300/10 px-4 py-3 text-sm font-semibold text-red-100">
-          Payment was not completed. {paymentReason ? `Reason: ${paymentReason}.` : ""} You can try again below.
+        <div className="mx-auto mb-6 w-full max-w-5xl rounded-2xl border border-red-300/35 bg-red-300/10 px-5 py-4 text-sm text-red-100">
+          <p className="font-black uppercase tracking-[0.14em]">Payment Not Completed</p>
+          <p className="mt-1 text-red-50/90">
+            {paymentReason ? `Reason: ${paymentReason}. ` : ""}
+            The preview is still here, and you can retry checkout below.
+          </p>
         </div>
       ) : null}
-        <RoastResult
+      <RoastResult
         roast={roastForView}
         scoring={scoringForView}
         url={safeReport.url}

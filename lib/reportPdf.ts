@@ -338,7 +338,7 @@ function drawLockedNotice(doc: PDFKit.PDFDocument, access: ReportAccess) {
   drawCallout(
     doc,
     `Unlock for R${access.priceZar}`,
-    "The full report includes score breakdowns, lost-customer analysis, priority fixes, and the implementation blueprint.",
+    "The full report includes category scoring, confidence signals, lost-customer analysis, priority fixes, example copy, and a 7-day implementation blueprint. Unlock once and come back to the same report link.",
   );
 }
 
