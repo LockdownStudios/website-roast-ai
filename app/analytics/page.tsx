@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAnalyticsSummary } from "@/lib/analytics";
+import { getRecentPaymentTransactions } from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
 
@@ -7,9 +8,27 @@ function statLabel(value: number, suffix = ""): string {
   return `${value}${suffix}`;
 }
 
+function formatMoney(amountKobo: number, currency: string): string {
+  return `${currency} ${(amountKobo / 100).toFixed(2)}`;
+}
+
+function formatPaymentDate(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
 export default async function AnalyticsPage() {
-  const summary = await getAnalyticsSummary();
+  const [summary, payments] = await Promise.all([
+    getAnalyticsSummary(),
+    getRecentPaymentTransactions(12),
+  ]);
   const generatedAt = new Date(summary.generatedAt).toLocaleString();
+  const initializedPayments = payments.filter((payment) => payment.status === "initialized").length;
+  const successfulPayments = payments.filter((payment) =>
+    payment.status === "success" || payment.status === "webhook_success"
+  ).length;
+  const failedPayments = payments.filter((payment) =>
+    payment.status === "failed" || payment.status === "webhook_ignored"
+  ).length;
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -79,6 +98,33 @@ export default async function AnalyticsPage() {
             </p>
             <p className="mt-2 text-3xl font-black text-white">
               {statLabel(summary.feedback.avgScoreAccuracy, "/5")}
+            </p>
+          </article>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-2xl border border-white/12 bg-surface/80 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              Recent Checkouts
+            </p>
+            <p className="mt-2 text-3xl font-black text-white">
+              {statLabel(payments.length)}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-white/12 bg-surface/80 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              Recent Paid Unlocks
+            </p>
+            <p className="mt-2 text-3xl font-black text-white">
+              {statLabel(successfulPayments)}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-white/12 bg-surface/80 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              Pending / Failed
+            </p>
+            <p className="mt-2 text-3xl font-black text-white">
+              {statLabel(initializedPayments + failedPayments)}
             </p>
           </article>
         </section>
@@ -266,6 +312,57 @@ export default async function AnalyticsPage() {
               <p className="mt-3 text-sm text-muted">No tracked roast errors.</p>
             )}
           </article>
+        </section>
+
+        <section className="rounded-2xl border border-white/12 bg-surface/80 p-5">
+          <h2 className="text-lg font-black uppercase tracking-[0.12em] text-accent-soft">
+            Latest Payment Activity
+          </h2>
+          {payments.length > 0 ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[720px] border-separate border-spacing-y-2 text-left text-sm">
+                <thead className="text-xs uppercase tracking-[0.14em] text-muted">
+                  <tr>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Amount</th>
+                    <th className="px-3 py-2">Email</th>
+                    <th className="px-3 py-2">Report</th>
+                    <th className="px-3 py-2">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.reference} className="bg-black/24 text-white/90">
+                      <td className="rounded-l-xl px-3 py-3 font-semibold">
+                        {payment.status.replace(/_/g, " ")}
+                      </td>
+                      <td className="px-3 py-3">
+                        {formatMoney(payment.amountKobo, payment.currency)}
+                      </td>
+                      <td className="px-3 py-3 text-muted">
+                        {payment.email || "No email"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Link
+                          href={`/result/${payment.reportId}`}
+                          className="text-accent-soft hover:text-accent"
+                        >
+                          {payment.reportId.slice(0, 8)}
+                        </Link>
+                      </td>
+                      <td className="rounded-r-xl px-3 py-3 text-muted">
+                        {formatPaymentDate(payment.updatedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              No payment activity recorded yet. Run a paid unlock after the migration is applied.
+            </p>
+          )}
         </section>
       </div>
     </main>

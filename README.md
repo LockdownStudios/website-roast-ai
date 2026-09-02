@@ -38,6 +38,7 @@ Open `http://localhost:3000`.
 
 4. If you want database persistence, run the SQL schema in Supabase:
 - `supabase/schema.sql`
+- For existing databases, also run new migration files in `supabase/migrations/`.
 
 ## Main routes
 
@@ -131,6 +132,8 @@ curl -X POST http://localhost:3000/api/internal/calibrate \
 - Full report unlock is R49 and exposes score breakdown, lost-customer analysis, quick fixes, and high-impact plan.
 - Unlock checkout now uses Paystack (`/api/paystack/initialize` -> Paystack Checkout -> `/api/paystack/verify`).
 - Configure Paystack webhook to `POST /api/paystack/webhook` for robust async confirmation.
+- Payment attempts are recorded in `payment_transactions` after running `supabase/migrations/20260902_payment_transactions.sql`.
+- Internal `/analytics` shows recent checkout, paid unlock, and failed/pending payment activity.
 
 ## Paystack setup (test mode)
 

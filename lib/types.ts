@@ -185,6 +185,29 @@ export type ReportAccess = {
   unlockedAt?: string;
 };
 
+export type PaymentTransactionStatus =
+  | "initialized"
+  | "success"
+  | "failed"
+  | "webhook_success"
+  | "webhook_ignored";
+
+export type PaymentTransaction = {
+  reference: string;
+  reportId: string;
+  userId?: string;
+  email?: string;
+  amountKobo: number;
+  currency: string;
+  status: PaymentTransactionStatus;
+  providerStatus?: string;
+  providerMessage?: string;
+  authorizationUrl?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type RoastClaimSource =
   | "title"
   | "meta"

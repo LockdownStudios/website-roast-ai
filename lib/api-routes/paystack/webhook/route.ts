@@ -4,6 +4,7 @@ import {
   verifyPaystackTransaction,
   verifyPaystackWebhookSignature,
 } from "@/lib/paystack";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { getRoastResult, unlockRoastResult } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -86,10 +87,38 @@ export async function POST(request: NextRequest) {
       (verification.currency ?? "").toUpperCase() === "ZAR";
 
     if (!wasSuccessful) {
+      await recordPaymentTransaction({
+        reference: verification.reference,
+        reportId,
+        userId:
+          typeof verification.metadata.userId === "string"
+            ? verification.metadata.userId
+            : report.userId ?? null,
+        amountKobo: verification.amountKobo || expectedAmountKobo,
+        currency: verification.currency ?? "ZAR",
+        status: "webhook_ignored",
+        providerStatus: verification.status,
+        providerMessage: "Webhook received but verification did not pass.",
+        metadata: verification.metadata,
+      });
       return NextResponse.json({ ok: true, ignored: true });
     }
 
     await unlockRoastResult(reportId, "paystack");
+    await recordPaymentTransaction({
+      reference: verification.reference,
+      reportId,
+      userId:
+        typeof verification.metadata.userId === "string"
+          ? verification.metadata.userId
+          : report.userId ?? null,
+      amountKobo: verification.amountKobo || expectedAmountKobo,
+      currency: verification.currency ?? "ZAR",
+      status: "webhook_success",
+      providerStatus: verification.status,
+      providerMessage: "Paystack webhook verified and report unlocked.",
+      metadata: verification.metadata,
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[paystack/webhook] verification failed", {

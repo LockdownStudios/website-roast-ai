@@ -1,6 +1,7 @@
 import "server-only";
 import type {
   AnalyticsEvent,
+  PaymentTransaction,
   RoastFeedbackEntry,
   StoredRoastReport,
   ToneAccuracy,
@@ -37,11 +38,29 @@ type SupabaseFeedbackRow = {
   created_at: string;
 };
 
+type SupabasePaymentTransactionRow = {
+  reference: string;
+  report_id: string;
+  user_id: string | null;
+  email: string | null;
+  amount_kobo: number;
+  currency: string;
+  status: PaymentTransaction["status"];
+  provider_status: string | null;
+  provider_message: string | null;
+  authorization_url: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const ROAST_SELECT =
   "id,url,user_id,scrape_hash,scraped,scoring,roast,created_at";
 const ANALYTICS_SELECT = "name,session_id,variant,metadata,created_at";
 const FEEDBACK_SELECT =
   "report_id,user_id,session_id,url,score_at_review,score_accuracy,tone_accuracy,notes,created_at";
+const PAYMENT_SELECT =
+  "reference,report_id,user_id,email,amount_kobo,currency,status,provider_status,provider_message,authorization_url,metadata,created_at,updated_at";
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -165,6 +184,45 @@ function fromFeedbackRow(row: SupabaseFeedbackRow): RoastFeedbackEntry | null {
     toneAccuracy: row.tone_accuracy,
     notes: typeof row.notes === "string" ? row.notes : undefined,
     createdAt: row.created_at,
+  };
+}
+
+function fromPaymentTransactionRow(
+  row: SupabasePaymentTransactionRow,
+): PaymentTransaction | null {
+  if (
+    typeof row.reference !== "string" ||
+    typeof row.report_id !== "string" ||
+    typeof row.currency !== "string" ||
+    typeof row.status !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string"
+  ) {
+    return null;
+  }
+
+  const amountKobo = Number(row.amount_kobo);
+  if (!Number.isFinite(amountKobo) || amountKobo <= 0) {
+    return null;
+  }
+
+  return {
+    reference: row.reference,
+    reportId: row.report_id,
+    userId: typeof row.user_id === "string" ? row.user_id : undefined,
+    email: typeof row.email === "string" ? row.email : undefined,
+    amountKobo: Math.round(amountKobo),
+    currency: row.currency,
+    status: row.status,
+    providerStatus:
+      typeof row.provider_status === "string" ? row.provider_status : undefined,
+    providerMessage:
+      typeof row.provider_message === "string" ? row.provider_message : undefined,
+    authorizationUrl:
+      typeof row.authorization_url === "string" ? row.authorization_url : undefined,
+    metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -467,6 +525,65 @@ export async function getRoastFeedbackFromSupabase(
 
   return rows.flatMap((row) => {
     const normalized = fromFeedbackRow(row);
+    return normalized ? [normalized] : [];
+  });
+}
+
+export async function savePaymentTransactionToSupabase(
+  payment: PaymentTransaction,
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    return false;
+  }
+
+  const payload = {
+    reference: payment.reference,
+    report_id: payment.reportId,
+    user_id: payment.userId ?? null,
+    email: payment.email ?? null,
+    amount_kobo: payment.amountKobo,
+    currency: payment.currency,
+    status: payment.status,
+    provider_status: payment.providerStatus ?? null,
+    provider_message: payment.providerMessage ?? null,
+    authorization_url: payment.authorizationUrl ?? null,
+    metadata: payment.metadata ?? {},
+    created_at: payment.createdAt,
+    updated_at: payment.updatedAt,
+  };
+
+  return supabaseWrite(
+    "payment_transactions?on_conflict=reference",
+    payload,
+    "resolution=merge-duplicates,return=minimal",
+  );
+}
+
+export async function getRecentPaymentTransactionsFromSupabase(
+  limit: number,
+): Promise<PaymentTransaction[] | null> {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    select: PAYMENT_SELECT,
+    order: "updated_at.desc",
+    limit: String(limit),
+  });
+
+  const rows = await supabaseFetch<SupabasePaymentTransactionRow[]>(
+    "payment_transactions",
+    { method: "GET" },
+    params,
+  );
+
+  if (!rows) {
+    return null;
+  }
+
+  return rows.flatMap((row) => {
+    const normalized = fromPaymentTransactionRow(row);
     return normalized ? [normalized] : [];
   });
 }

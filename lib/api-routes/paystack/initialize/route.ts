@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractBearerToken, getSupabaseUserFromAccessToken } from "@/lib/auth";
 import { getRoastAccess, isRoastUnlocked } from "@/lib/reportAccess";
 import { createPaystackReference, initializePaystackTransaction } from "@/lib/paystack";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { getRoastResult } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,21 @@ export async function POST(request: NextRequest) {
       metadata: {
         reportId: report.id,
         userId: user?.id ?? report.userId ?? null,
+        product: "website_roast_full_report_unlock",
+        priceZar: access.priceZar,
+      },
+    });
+    await recordPaymentTransaction({
+      reference: checkout.reference,
+      reportId: report.id,
+      userId: user?.id ?? report.userId ?? null,
+      email: payerEmail,
+      amountKobo: access.priceZar * 100,
+      currency: "ZAR",
+      status: "initialized",
+      providerStatus: "initialized",
+      authorizationUrl: checkout.authorizationUrl,
+      metadata: {
         product: "website_roast_full_report_unlock",
         priceZar: access.priceZar,
       },

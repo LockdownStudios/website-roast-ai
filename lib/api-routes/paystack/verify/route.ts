@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoastAccess } from "@/lib/reportAccess";
 import { verifyPaystackTransaction } from "@/lib/paystack";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { getRoastResult, unlockRoastResult } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -68,12 +69,40 @@ export async function GET(request: NextRequest) {
       (verification.currency ?? "").toUpperCase() === "ZAR";
 
     if (!wasSuccessful) {
+      await recordPaymentTransaction({
+        reference: verification.reference,
+        reportId,
+        userId:
+          typeof verification.metadata.userId === "string"
+            ? verification.metadata.userId
+            : report.userId ?? null,
+        amountKobo: verification.amountKobo || expectedAmountKobo,
+        currency: verification.currency ?? "ZAR",
+        status: "failed",
+        providerStatus: verification.status,
+        providerMessage: "Paystack callback verification failed.",
+        metadata: verification.metadata,
+      });
       return NextResponse.redirect(
         resultRedirectUrl(request, reportId, "failed", "verification_failed"),
       );
     }
 
     await unlockRoastResult(reportId, "paystack");
+    await recordPaymentTransaction({
+      reference: verification.reference,
+      reportId,
+      userId:
+        typeof verification.metadata.userId === "string"
+          ? verification.metadata.userId
+          : report.userId ?? null,
+      amountKobo: verification.amountKobo || expectedAmountKobo,
+      currency: verification.currency ?? "ZAR",
+      status: "success",
+      providerStatus: verification.status,
+      providerMessage: "Paystack callback verified and report unlocked.",
+      metadata: verification.metadata,
+    });
     return NextResponse.redirect(resultRedirectUrl(request, reportId, "success"));
   } catch (error) {
     console.error("[paystack/verify] failed", {
