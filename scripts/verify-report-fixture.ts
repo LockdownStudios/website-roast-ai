@@ -84,6 +84,61 @@ async function main() {
     throw new Error("Roast AI sanitizer failed to clean deliberate contamination.");
   }
 
+  const taxContaminated = sanitizeRoastPayload(
+    {
+      ...report.roast,
+      first_impression: "Tax Consulting South Africa sounds bland, but the evidence is tax-specific.",
+      mistakes: [
+        "The site talks about SARS tax consulting, but this line suddenly recommends landscaping proof.",
+        "The consultation CTA needs sharper tax dispute language.",
+      ],
+      quick_fixes: [
+        "Where: Hero | Fix: Add landscaping project photos | Example: Show completed garden work.",
+        "Where: Consultation CTA | Fix: Explain SARS dispute next steps | Example: Book a tax consultation.",
+      ],
+      evidence: ["Services found: Landscaping | Tax consulting"],
+    },
+    {
+      ...report.scraped,
+      url: "https://www.taxconsulting.co.za/",
+      title: "Tax Consulting South Africa",
+      description: "Tax consulting, SARS dispute resolution, expat tax, and tax compliance services.",
+      headings: {
+        h1: ["TAX CONSULTING SOUTH AFRICA"],
+        h2: ["Tax Consulting", "SARS Dispute Resolution", "Expatriate Tax"],
+      },
+      contentSnippet:
+        "Tax Consulting South Africa assists with SARS disputes, tax compliance, expatriate tax, and international tax.",
+      siteFacts: {
+        companyName: "Tax Consulting South Africa",
+        services: [
+          { value: "Tax consulting", sourceUrl: "https://www.taxconsulting.co.za/", sourceRole: "home" },
+          { value: "SARS dispute resolution", sourceUrl: "https://www.taxconsulting.co.za/", sourceRole: "home" },
+          { value: "Expatriate tax", sourceUrl: "https://www.taxconsulting.co.za/", sourceRole: "services" },
+        ],
+        productCategories: [],
+        exclusions: [],
+        locations: [{ value: "South Africa", sourceUrl: "https://www.taxconsulting.co.za/", sourceRole: "home" }],
+        contacts: report.scraped.siteFacts?.contacts ?? [],
+        ctas: [{ value: "Free Consultation", sourceUrl: "https://www.taxconsulting.co.za/", sourceRole: "home" }],
+        trustSignals: report.scraped.siteFacts?.trustSignals ?? [],
+        pagesReviewed: report.scraped.siteFacts?.pagesReviewed ?? [],
+        copyIssues: [],
+      },
+    },
+    report.scoring,
+  );
+  const taxContaminatedCheck = [
+    taxContaminated.first_impression,
+    ...taxContaminated.mistakes,
+    ...taxContaminated.quick_fixes,
+    ...taxContaminated.evidence,
+  ].join(" ");
+
+  if (/landscap|garden|completed garden/i.test(taxContaminatedCheck)) {
+    throw new Error("Roast AI sanitizer failed to reject tax/landscaping contamination.");
+  }
+
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputPath, pdf);
   console.log(`Generated ${path.relative(process.cwd(), outputPath)} (${pdf.length} bytes)`);

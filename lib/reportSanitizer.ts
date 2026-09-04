@@ -17,6 +17,15 @@ const INTERNAL_DIAGNOSTIC_PATTERN =
 const CROSS_SITE_CONTAMINATION_PATTERN =
   /\b(?:mobile game|mobile players?|players?\s+(?:to|who|will|can)|download the app|install (?:the )?app|start playing|app-store|app store|google play)\b/i;
 
+const DOMAIN_FAMILY_PATTERNS: Array<{ family: string; pattern: RegExp }> = [
+  { family: "professional", pattern: /\b(?:tax consulting|tax compliance|sars|tax dispute|expat(?:riate)? tax|international tax|payroll tax|accounting|accountant|bookkeeping|legal services?|attorneys?|law firm|consulting)\b/i },
+  { family: "construction", pattern: /\b(?:construction|building services?|renovations?|paving|demolition|rubble removal|site clearing|rock breaking|blasting|plant hire|roofing|waterproofing|cladding)\b/i },
+  { family: "landscaping", pattern: /\b(?:landscap(?:e|ing)|garden maintenance|instant lawn|tree felling|irrigation|water features?|bomas?)\b/i },
+  { family: "solar_security", pattern: /\b(?:solar|inverter|battery|batteries|backup power|cctv|security|alarm|access control|electric fence)\b/i },
+  { family: "healthcare", pattern: /\b(?:clinic|doctor|medical|healthcare|dentist|dental|patient|treatment|practice)\b/i },
+  { family: "creative", pattern: /\b(?:web design|branding|marketing|creative agency|studio|advertising|campaign)\b/i },
+];
+
 function isInternalDiagnosticLine(value: string) {
   return INTERNAL_DIAGNOSTIC_PATTERN.test(value);
 }
@@ -89,6 +98,49 @@ function isMobileGameContext(scraped: ScrapedWebsiteData | undefined): boolean {
 
 function isEcommerceContext(scraped: ScrapedWebsiteData | undefined): boolean {
   return scraped ? inferSiteNiche(scraped) === "ecommerce" : false;
+}
+
+function supportedDomainFamilies(scraped: ScrapedWebsiteData | undefined): Set<string> | null {
+  if (!scraped) {
+    return null;
+  }
+
+  const evidence = [
+    scraped.url,
+    scraped.title,
+    scraped.description,
+    scraped.headings.h1.join(" "),
+    scraped.headings.h2.slice(0, 8).join(" "),
+    scraped.contentSnippet,
+    ...(scraped.siteFacts?.services ?? []).map((fact) => fact.value),
+    ...(scraped.siteFacts?.productCategories ?? []).map((fact) => fact.value),
+  ].join(" ");
+  const supported = new Set<string>();
+
+  for (const item of DOMAIN_FAMILY_PATTERNS) {
+    if (item.pattern.test(evidence)) {
+      supported.add(item.family);
+    }
+  }
+
+  const niche = inferSiteNiche(scraped);
+  if (niche === "professional_service") supported.add("professional");
+  if (niche === "healthcare") supported.add("healthcare");
+  if (niche === "creative_agency") supported.add("creative");
+  if (niche === "ecommerce") supported.add("solar_security");
+
+  return supported.size ? supported : null;
+}
+
+function hasUnsupportedDomainLanguage(value: string, scraped: ScrapedWebsiteData | undefined): boolean {
+  const supported = supportedDomainFamilies(scraped);
+  if (!supported) {
+    return false;
+  }
+
+  return DOMAIN_FAMILY_PATTERNS.some(
+    (item) => item.pattern.test(value) && !supported.has(item.family),
+  );
 }
 
 function scrubCrossSiteContamination(
@@ -169,7 +221,8 @@ function cleanGroundedLines(
       (line) =>
         line &&
         !isInternalDiagnosticLine(line) &&
-        !hasCrossSiteContamination(line, options.scraped),
+        !hasCrossSiteContamination(line, options.scraped) &&
+        !hasUnsupportedDomainLanguage(line, options.scraped),
     );
 }
 

@@ -21,7 +21,22 @@ type SourceHint = {
   sourceRole?: CrawlPageRole;
 };
 
+type ServiceFamily =
+  | "construction"
+  | "landscaping"
+  | "solar_security"
+  | "professional"
+  | "healthcare"
+  | "creative"
+  | "generic";
+
 const SERVICE_PATTERNS: PatternFact[] = [
+  { value: "Tax consulting", pattern: /\b(?:tax consulting|tax consultant|tax consultants|tax advisory|tax advice)\b/i },
+  { value: "Tax compliance", pattern: /\b(?:tax compliance|tax returns?|tax registration|sars compliance|income tax|provisional tax)\b/i },
+  { value: "SARS dispute resolution", pattern: /\b(?:sars disputes?|tax disputes?|sars objections?|sars appeals?|sars audit|sars audits)\b/i },
+  { value: "Expatriate tax", pattern: /\b(?:expatriate tax|expat tax|emigration tax|foreign employment income|non-resident tax)\b/i },
+  { value: "International tax", pattern: /\b(?:international tax|cross[-\s]?border tax|double tax agreement|transfer pricing)\b/i },
+  { value: "Payroll tax", pattern: /\b(?:payroll tax|paye|employees'? tax)\b/i },
   { value: "Construction", pattern: /\b(?:construction services?|construction company|building construction|residential construction|commercial construction|industrial construction)\b/i },
   { value: "Building services", pattern: /\bbuilding (?:services|contractors?|projects?)\b/i },
   { value: "Residential construction", pattern: /\bresidential construction\b/i },
@@ -58,12 +73,72 @@ const SERVICE_PATTERNS: PatternFact[] = [
   { value: "Solar", pattern: /\bsolar\b/i },
   { value: "Security", pattern: /\b(?:cctv|alarm|security|access control|electric fence)\b/i },
   { value: "Legal services", pattern: /\b(?:law firm|attorneys?|legal services?)\b/i },
-  { value: "Accounting", pattern: /\b(?:accounting|bookkeeping|tax services?)\b/i },
+  { value: "Accounting", pattern: /\b(?:accounting|accountants?|bookkeeping|financial statements?)\b/i },
   { value: "Dental care", pattern: /\b(?:dentist|dental)\b/i },
   { value: "Medical practice", pattern: /\b(?:clinic|medical practice|healthcare)\b/i },
   { value: "Web design", pattern: /\bweb design\b/i },
   { value: "Marketing", pattern: /\b(?:marketing|paid media|advertising)\b/i },
 ];
+
+const SERVICE_FAMILIES: Record<string, ServiceFamily> = {
+  "tax consulting": "professional",
+  "tax compliance": "professional",
+  "sars dispute resolution": "professional",
+  "expatriate tax": "professional",
+  "international tax": "professional",
+  "payroll tax": "professional",
+  "legal services": "professional",
+  accounting: "professional",
+  construction: "construction",
+  "building services": "construction",
+  "residential construction": "construction",
+  "commercial construction": "construction",
+  "industrial construction": "construction",
+  renovations: "construction",
+  paving: "construction",
+  "driveway paving": "construction",
+  "patio and pool paving": "construction",
+  "commercial and industrial paving": "construction",
+  cladding: "construction",
+  "paving cleaning": "construction",
+  demolition: "construction",
+  "rubble removal": "construction",
+  "site clearing": "construction",
+  "rock breaking": "construction",
+  blasting: "construction",
+  "plant hire": "construction",
+  "tipper truck hire": "construction",
+  roofing: "construction",
+  painting: "construction",
+  waterproofing: "construction",
+  landscaping: "landscaping",
+  "residential landscaping": "landscaping",
+  "commercial landscaping": "landscaping",
+  "garden maintenance": "landscaping",
+  "water features": "landscaping",
+  "bomas and entertainment areas": "landscaping",
+  "herb and vegetable gardens": "landscaping",
+  "garden decor": "landscaping",
+  "instant lawns": "landscaping",
+  "tree felling": "landscaping",
+  irrigation: "landscaping",
+  solar: "solar_security",
+  security: "solar_security",
+  "dental care": "healthcare",
+  "medical practice": "healthcare",
+  "web design": "creative",
+  marketing: "creative",
+};
+
+const FAMILY_INTENT_PATTERNS: Record<ServiceFamily, RegExp> = {
+  professional: /\b(?:tax|sars|compliance|advisory|consult(?:ing|ants?)|accountants?|accounting|bookkeeping|legal|attorneys?|law firm|financial statements?|payroll|paye|expatriate|international tax)\b/i,
+  construction: /\b(?:construction|building|renovation|paving|demolition|rubble|site clearing|rock breaking|blasting|plant hire|roofing|painting|waterproofing|contractors?)\b/i,
+  landscaping: /\b(?:landscap(?:e|ing)|garden|lawn|irrigation|tree felling|bomas?|water features?)\b/i,
+  solar_security: /\b(?:solar|inverter|backup power|cctv|security|alarm|access control|electric fence)\b/i,
+  healthcare: /\b(?:clinic|doctor|medical|healthcare|dentist|dental|treatment|patient|practice)\b/i,
+  creative: /\b(?:web design|branding|marketing|advertising|creative|campaign|studio)\b/i,
+  generic: /\b(?:services?|solutions?)\b/i,
+};
 
 const PRODUCT_CATEGORY_PATTERNS: PatternFact[] = [
   { value: "Solar inverters", pattern: /\bsolar inverters?\b|\ball inverters?\b|\bhybrid inverters?\b|\bgrid tie\b|\boff[-\s]?grid\b/i },
@@ -264,6 +339,86 @@ function factsFromPatterns(
   return facts;
 }
 
+function factFamily(value: string): ServiceFamily {
+  return SERVICE_FAMILIES[normalizeKey(value)] ?? "generic";
+}
+
+function primaryBusinessCorpus(scraped: ScrapedWebsiteData): string {
+  return [
+    scraped.url,
+    scraped.title,
+    scraped.description,
+    scraped.headings.h1.join(" "),
+    scraped.headings.h2.slice(0, 8).join(" "),
+    scraped.contentSnippet,
+  ].join(" ");
+}
+
+function serviceFamilyScore(scraped: ScrapedWebsiteData, family: ServiceFamily, facts: SiteFactEvidence[]): number {
+  const corpus = primaryBusinessCorpus(scraped);
+  const factHits = facts.filter((fact) => factFamily(fact.value) === family).length * 2;
+  const corpusHit = FAMILY_INTENT_PATTERNS[family].test(corpus) ? 2 : 0;
+  const pageHits = (scraped.crawl?.pages ?? []).filter((page) =>
+    FAMILY_INTENT_PATTERNS[family].test(
+      [page.url, page.title, page.primaryHeading, page.contentSnippet].filter(Boolean).join(" "),
+    ),
+  ).length;
+
+  return factHits + corpusHit + Math.min(pageHits, 3);
+}
+
+function dominantServiceFamilies(scraped: ScrapedWebsiteData, facts: SiteFactEvidence[]): Set<ServiceFamily> {
+  const families: ServiceFamily[] = [
+    "professional",
+    "construction",
+    "landscaping",
+    "solar_security",
+    "healthcare",
+    "creative",
+  ];
+  const scored = families
+    .map((family) => ({ family, score: serviceFamilyScore(scraped, family, facts) }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  if (!scored.length) {
+    return new Set(families);
+  }
+
+  const best = scored[0];
+  const allowed = new Set<ServiceFamily>([best.family]);
+
+  for (const item of scored.slice(1)) {
+    if (item.score >= Math.max(4, best.score - 2)) {
+      allowed.add(item.family);
+    }
+  }
+
+  return allowed;
+}
+
+function filterServicesForBusiness(scraped: ScrapedWebsiteData, facts: SiteFactEvidence[]): SiteFactEvidence[] {
+  const allowedFamilies = dominantServiceFamilies(scraped, facts);
+
+  return facts.filter((fact) => {
+    const family = factFamily(fact.value);
+    if (family === "generic" || allowedFamilies.has(family)) {
+      return true;
+    }
+
+    const evidence = [
+      fact.sourceUrl,
+      fact.sourceRole,
+      scraped.title,
+      scraped.description,
+      scraped.headings.h1.join(" "),
+      scraped.contentSnippet,
+    ].join(" ");
+
+    return FAMILY_INTENT_PATTERNS[family].test(evidence) && allowedFamilies.size > 1;
+  });
+}
+
 function exclusionFacts(scraped: ScrapedWebsiteData): SiteFactEvidence[] {
   const facts: SiteFactEvidence[] = [];
   const seen = new Set<string>();
@@ -423,10 +578,14 @@ export function buildSiteFacts(scraped: ScrapedWebsiteData): SiteFacts {
   const fallbackSource: SourceHint = { sourceUrl: scraped.url, sourceRole: "home" };
   const exclusions = exclusionFacts(scraped);
   const excludedValues = new Set(exclusions.map((fact) => normalizeKey(fact.value)));
+  const services = filterServicesForBusiness(
+    scraped,
+    factsFromPatterns(scraped, SERVICE_PATTERNS, 10, excludedValues),
+  );
 
   return {
     companyName: companyName(scraped),
-    services: factsFromPatterns(scraped, SERVICE_PATTERNS, 10, excludedValues),
+    services,
     productCategories: factsFromPatterns(scraped, PRODUCT_CATEGORY_PATTERNS, 12),
     exclusions,
     locations: factsFromPatterns(scraped, LOCATION_PATTERNS, 8),
