@@ -231,9 +231,77 @@ export type RoastClaim = {
   severity: RoastClaimSeverity;
 };
 
+export type RoastBusinessModel =
+  | "local_service"
+  | "professional_service"
+  | "ecommerce"
+  | "healthcare"
+  | "b2b_consulting"
+  | "construction_trade"
+  | "creative_agency"
+  | "franchise_location"
+  | "saas_platform"
+  | "public_enterprise"
+  | "other";
+
+export type RoastSiteGoal =
+  | "sell_online"
+  | "generate_calls"
+  | "book_consultations"
+  | "capture_quote_requests"
+  | "build_credibility"
+  | "explain_complex_services"
+  | "support_existing_customers"
+  | "recruit_partners"
+  | "drive_trials_or_demos";
+
+export type RoastBuyerAnxiety =
+  | "credibility"
+  | "qualification"
+  | "price_uncertainty"
+  | "location_fit"
+  | "product_fit"
+  | "response_time"
+  | "risk"
+  | "next_step"
+  | "delivery_or_warranty"
+  | "privacy_or_compliance";
+
+export type RoastPainPoint =
+  | "weak_offer_clarity"
+  | "wrong_cta_for_intent"
+  | "thin_authority_proof"
+  | "missing_price_expectation"
+  | "poor_product_discovery"
+  | "weak_checkout_reassurance"
+  | "no_service_area_confidence"
+  | "flat_visual_hierarchy"
+  | "navigation_hides_money_pages"
+  | "interchangeable_copy"
+  | "missing_process_explanation"
+  | "weak_urgency"
+  | "no_comparison_argument"
+  | "poor_mobile_scanning"
+  | "missing_high_friction_faqs"
+  | "underused_trust_assets"
+  | "strong_site_minor_leaks"
+  | "thin_customer_support_path"
+  | "unclear_buyer_fit";
+
+export type RoastDiagnosis = {
+  businessModel: RoastBusinessModel;
+  siteGoal: RoastSiteGoal;
+  buyerAnxieties: RoastBuyerAnxiety[];
+  primaryPainpoints: RoastPainPoint[];
+  summary: string;
+  evidence: string[];
+  confidence: "high" | "medium" | "low";
+};
+
 export type RoastResultPayload = {
   score: number;
   score_label: ScoreLabel;
+  diagnosis?: RoastDiagnosis;
   first_impression: string;
   single_biggest_leak: string;
   mistakes: string[];

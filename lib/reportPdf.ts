@@ -1,5 +1,10 @@
 import "server-only";
 import PDFDocument from "pdfkit";
+import {
+  businessModelLabel,
+  painPointLabel,
+  siteGoalLabel,
+} from "./diagnosis";
 import { buildImplementationBlueprint } from "./implementationGuide";
 import { BREAKDOWN_KEYS, CATEGORY_WEIGHTS, categoryRatio } from "./scoringConfig";
 import type {
@@ -86,6 +91,7 @@ function drawReportBody(
   drawParagraph(doc, cleanReportText(roast.first_impression, subject), 12, ROAST_TEXT);
   drawCallout(doc, "Single Biggest Leak", cleanReportText(roast.single_biggest_leak, subject));
   drawPagesReviewed(doc, report, subject);
+  drawDiagnosis(doc, report);
 
   drawBulletSection(
     doc,
@@ -261,7 +267,9 @@ function drawBlueprint(
 
 function priorityFixes(report: StoredRoastReport, subject: string): string[] {
   const blueprint = buildImplementationBlueprint(report.scraped, report.scoring);
-  const fixes = blueprint.fixes.slice(0, 4).map((fix) => {
+  const fixes = report.roast.quick_fixes.length > 0
+    ? report.roast.quick_fixes
+    : blueprint.fixes.slice(0, 4).map((fix) => {
     const firstStep = fix.how[0] ?? fix.why;
     const impact = fix.impact ? `Impact: ${fix.impact}.` : "";
     const effort = fix.effort ? `Effort: ${fix.effort}.` : "";
@@ -269,6 +277,23 @@ function priorityFixes(report: StoredRoastReport, subject: string): string[] {
   });
 
   return cleanList(fixes.length > 0 ? fixes : report.roast.quick_fixes, subject, 4);
+}
+
+function drawDiagnosis(doc: PDFKit.PDFDocument, report: StoredRoastReport) {
+  const diagnosis = report.roast.diagnosis;
+  if (!diagnosis) {
+    return;
+  }
+
+  drawSubheadingBullets(
+    doc,
+    "Site Diagnosis",
+    [
+      `Business model: ${businessModelLabel(diagnosis.businessModel)}`,
+      `Main site goal: ${siteGoalLabel(diagnosis.siteGoal)}`,
+      `Primary painpoints: ${diagnosis.primaryPainpoints.slice(0, 4).map(painPointLabel).join(" | ")}`,
+    ],
+  );
 }
 
 function drawScoreGrid(doc: PDFKit.PDFDocument, scoring: WebsiteScoring) {

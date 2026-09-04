@@ -1,4 +1,9 @@
 import {
+  diagnoseWebsite,
+  diagnosisPromptBlock,
+  diagnosisQuickFixes,
+} from "./diagnosis";
+import {
   categoryRatio,
   CATEGORY_WEIGHTS,
   getWeakestCategory,
@@ -449,6 +454,7 @@ function buildUserPrompt(
   scrapedData: ScrapedWebsiteData,
   scoringData: WebsiteScoring,
 ): string {
+  const diagnosis = diagnoseWebsite(scrapedData, scoringData);
   const crawl = scrapedData.crawl;
   const crawlLines = crawl
     ? `CRAWL SUMMARY:
@@ -480,6 +486,7 @@ DETECTED SIGNALS:
 ${visualPromptLines(scrapedData)}
 ${crawlLines}
 ${siteContextPromptLines(scrapedData, scoringData)}
+${diagnosisPromptBlock(diagnosis)}
 ${buildVoiceDirective(scrapedData, scoringData)}
 ${buildSiteEvidenceDossier(scrapedData, scoringData)}
 
@@ -511,6 +518,15 @@ Return JSON in this exact format:
 {
   "score": number,
   "score_label": "string",
+  "diagnosis": {
+    "businessModel": "local_service|professional_service|ecommerce|healthcare|b2b_consulting|construction_trade|creative_agency|franchise_location|saas_platform|public_enterprise|other",
+    "siteGoal": "sell_online|generate_calls|book_consultations|capture_quote_requests|build_credibility|explain_complex_services|support_existing_customers|recruit_partners|drive_trials_or_demos",
+    "buyerAnxieties": ["credibility|qualification|price_uncertainty|location_fit|product_fit|response_time|risk|next_step|delivery_or_warranty|privacy_or_compliance"],
+    "primaryPainpoints": ["weak_offer_clarity|wrong_cta_for_intent|thin_authority_proof|missing_price_expectation|poor_product_discovery|weak_checkout_reassurance|no_service_area_confidence|flat_visual_hierarchy|navigation_hides_money_pages|interchangeable_copy|missing_process_explanation|weak_urgency|no_comparison_argument|poor_mobile_scanning|missing_high_friction_faqs|underused_trust_assets|strong_site_minor_leaks|thin_customer_support_path|unclear_buyer_fit"],
+    "summary": "string",
+    "evidence": ["string"],
+    "confidence": "high|medium|low"
+  },
   "first_impression": "string",
   "single_biggest_leak": "string",
   "mistakes": ["string", "string", "string"],
@@ -532,6 +548,9 @@ Return JSON in this exact format:
 Output constraints:
 - Keep score within +/-0.4 of precomputed score
 - score_label must map honestly to score
+- diagnosis must match the DIAGNOSIS STRATEGY exactly; do not invent a different business model, site goal, or painpoint set
+- Use the primary painpoints as the strategy for mistakes and quick_fixes. Do not force the same trust/CTA/copy checklist onto every site.
+- Strong sites must read as "missed upside and friction" rather than pretending the website is broken.
 - first_impression must sound like a real harsh roast, not generic UX advice or a neutral audit note
 - first_impression must open with the hardest line, not a setup sentence
 - first_impression must quote or name at least one exact site detail from the dossier
@@ -1651,7 +1670,11 @@ function fallbackQuickFixes(
   scoringData: WebsiteScoring,
 ): string[] {
   const blueprint = buildImplementationBlueprint(scrapedData, scoringData);
-  const fixes = toQuickFixLines(blueprint, 4);
+  const diagnosis = diagnoseWebsite(scrapedData, scoringData);
+  const fixes = [
+    ...diagnosisQuickFixes(scrapedData, scoringData, diagnosis),
+    ...toQuickFixLines(blueprint, 4),
+  ];
   const primaryCta = blueprint.primaryCta;
 
   fixes.push(
@@ -1731,6 +1754,7 @@ export function generateFallbackRoast(
 ): RoastResultPayload {
   const context = buildSiteContextSnapshot(scrapedData);
   const blueprint = buildImplementationBlueprint(scrapedData, scoringData);
+  const diagnosis = diagnoseWebsite(scrapedData, scoringData);
   const score = roundToOne(scoringData.score);
   const toneSummary = wittyToneByWeakest(scoringData);
   const evidence = scoringData.evidence.slice(0, 5);
@@ -1739,6 +1763,7 @@ export function generateFallbackRoast(
   const base: RoastResultPayload = {
     score,
     score_label: toScoreLabel(score),
+    diagnosis,
     first_impression: buildFirstImpression(scrapedData, scoringData),
     single_biggest_leak: buildBiggestLeak(scrapedData, scoringData),
     mistakes: fallbackMistakes(scrapedData, scoringData),
@@ -1765,6 +1790,7 @@ export function generateFallbackRoast(
       evidence: base.evidence,
       claim_contract: base.claim_contract,
       access: base.access,
+      diagnosis: base.diagnosis,
     },
     scrapedData,
     scoringData,
@@ -1889,6 +1915,7 @@ function normalizeRoast(
       : fallback.tone_summary;
 
   const merged: Omit<RoastResultPayload, "score" | "score_label"> = {
+    diagnosis: diagnoseWebsite(scrapedData, scoringData),
     first_impression: firstImpression,
     single_biggest_leak: leak,
     mistakes:
@@ -1911,12 +1938,14 @@ function normalizeRoast(
       ...fallback,
       score: normalizedScore,
       score_label: toScoreLabel(normalizedScore),
+      diagnosis: diagnoseWebsite(scrapedData, scoringData),
     };
   }
 
   return {
     score: normalizedScore,
     score_label: toScoreLabel(normalizedScore),
+    diagnosis: diagnoseWebsite(scrapedData, scoringData),
     ...roastedMerged,
   };
 }

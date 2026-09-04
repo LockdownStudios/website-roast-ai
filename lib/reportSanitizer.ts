@@ -8,6 +8,7 @@ import type {
   VisualAudit,
   WebsiteScoring,
 } from "./types";
+import { diagnoseWebsite } from "./diagnosis";
 import { buildImplementationBlueprint } from "./implementationGuide";
 import { inferSiteNiche } from "./siteContext";
 
@@ -353,8 +354,10 @@ export function sanitizeRoastPayload(
   scoring?: WebsiteScoring,
 ): RoastResultPayload {
   const options = { scraped, scoring };
+  const diagnosis = scraped && scoring ? diagnoseWebsite(scraped, scoring) : roast.diagnosis;
   return {
     ...roast,
+    diagnosis,
     first_impression: scrubCrossSiteContamination(roast.first_impression, options),
     single_biggest_leak: scrubCrossSiteContamination(roast.single_biggest_leak, options),
     mistakes: cleanGroundedLines(roast.mistakes, options),

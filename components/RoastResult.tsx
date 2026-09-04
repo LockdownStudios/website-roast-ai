@@ -5,6 +5,11 @@ import type {
   WebsiteScoring,
 } from "@/lib/types";
 import { categoryRatio, CATEGORY_WEIGHTS } from "@/lib/scoringConfig";
+import {
+  businessModelLabel,
+  painPointLabel,
+  siteGoalLabel,
+} from "@/lib/diagnosis";
 import { buildImplementationBlueprint, toQuickFixLines } from "@/lib/implementationGuide";
 import { ScoreBadge } from "./ScoreBadge";
 
@@ -363,10 +368,13 @@ export function RoastResult({
     4,
   );
   const mistakeLines = uniqueReportLines(visibleMistakes, subject, isUnlocked ? 5 : 3);
-  const quickFixSource = implementationBlueprint
-    ? toQuickFixLines(implementationBlueprint, 4)
-    : roast.quick_fixes;
+  const quickFixSource = roast.quick_fixes.length > 0
+    ? roast.quick_fixes
+    : implementationBlueprint
+      ? toQuickFixLines(implementationBlueprint, 4)
+      : [];
   const quickFixLines = uniqueReportLines(quickFixSource, subject, 4);
+  const diagnosis = roast.diagnosis;
   const firstImpression = cleanReportText(roast.first_impression, subject);
   const singleBiggestLeak = cleanReportText(roast.single_biggest_leak, subject);
   const lostCustomers = cleanReportText(roast.lost_customers, subject);
@@ -412,6 +420,51 @@ export function RoastResult({
           </ul>
         ) : null}
       </section>
+
+      {isUnlocked && diagnosis ? (
+        <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
+          <h2 className="text-lg font-black uppercase tracking-wide text-accent-soft">
+            Site Diagnosis
+          </h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-background/55 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Business
+              </p>
+              <p className="mt-1 text-sm font-black text-white">
+                {businessModelLabel(diagnosis.businessModel)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-background/55 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Main Goal
+              </p>
+              <p className="mt-1 text-sm font-black text-white">
+                {siteGoalLabel(diagnosis.siteGoal)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-background/55 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Confidence
+              </p>
+              <p className="mt-1 text-sm font-black capitalize text-white">
+                {diagnosis.confidence}
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-white/80">{diagnosis.summary}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {diagnosis.primaryPainpoints.slice(0, 5).map((painPoint) => (
+              <span
+                key={painPoint}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/85"
+              >
+                {painPointLabel(painPoint)}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {isUnlocked ? (
         <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
