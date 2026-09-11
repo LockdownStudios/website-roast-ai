@@ -233,7 +233,12 @@ function inferSiteGoal(
   const text = [siteText(scraped), primaryCta].join(" ");
   if (niche === "ecommerce") return "sell_online";
   if (niche === "hospitality") {
-    return /\b(restaurant|dining|menu|table|reserve)\b/i.test(text)
+    const stayText = [
+      siteText(scraped),
+      scraped.siteFacts?.services.map((fact) => fact.value).join(" "),
+    ].join(" ");
+    const hasStayOffer = /\b(hotel|resort|lodge|guest house|guesthouse|accommodation|rooms?|suites?|camping stays?|camping stands?|campsites?|camp sites?|book (?:a )?room|book your stay)\b/i.test(stayText);
+    return /\b(restaurant|dining|breakfast|lunch|dinner|reserve a table)\b/i.test(text) && !hasStayOffer
       ? "drive_reservations"
       : "drive_direct_bookings";
   }

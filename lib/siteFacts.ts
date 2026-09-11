@@ -24,6 +24,7 @@ type SourceHint = {
 type ServiceFamily =
   | "construction"
   | "landscaping"
+  | "hospitality"
   | "solar_security"
   | "professional"
   | "healthcare"
@@ -72,6 +73,10 @@ const SERVICE_PATTERNS: PatternFact[] = [
   { value: "Waterproofing", pattern: /\bwaterproofing\b/i },
   { value: "Solar", pattern: /\bsolar\b/i },
   { value: "Security", pattern: /\b(?:cctv|alarm|security|access control|electric fence)\b/i },
+  { value: "Hotel accommodation", pattern: /\b(?:hotel|resort|lodge|guest house|guesthouse|accommodation|rooms?|suites?)\b/i },
+  { value: "Camping stays", pattern: /\b(?:camping stands?|camping sites?|campsites?|camp sites?)\b/i },
+  { value: "Conferencing and events", pattern: /\b(?:conference|conferencing|events?|venue|functions?|weddings?)\b/i },
+  { value: "Restaurant and dining", pattern: /\b(?:restaurant|dining|breakfast|lunch|dinner)\b/i },
   { value: "Legal services", pattern: /\b(?:law firm|attorneys?|legal services?)\b/i },
   { value: "Accounting", pattern: /\b(?:accounting|accountants?|bookkeeping|financial statements?)\b/i },
   { value: "Dental care", pattern: /\b(?:dentist|dental)\b/i },
@@ -124,6 +129,10 @@ const SERVICE_FAMILIES: Record<string, ServiceFamily> = {
   irrigation: "landscaping",
   solar: "solar_security",
   security: "solar_security",
+  "hotel accommodation": "hospitality",
+  "camping stays": "hospitality",
+  "conferencing and events": "hospitality",
+  "restaurant and dining": "hospitality",
   "dental care": "healthcare",
   "medical practice": "healthcare",
   "web design": "creative",
@@ -134,6 +143,7 @@ const FAMILY_INTENT_PATTERNS: Record<ServiceFamily, RegExp> = {
   professional: /\b(?:tax|sars|compliance|advisory|consult(?:ing|ants?)|accountants?|accounting|bookkeeping|legal|attorneys?|law firm|financial statements?|payroll|paye|expatriate|international tax)\b/i,
   construction: /\b(?:construction|building|renovation|paving|demolition|rubble|site clearing|rock breaking|blasting|plant hire|roofing|painting|waterproofing|contractors?)\b/i,
   landscaping: /\b(?:landscap(?:e|ing)|garden|lawn|irrigation|tree felling|bomas?|water features?)\b/i,
+  hospitality: /\b(?:hotel|resort|lodge|guest house|guesthouse|accommodation|rooms?|suites?|camping stands?|campsites?|restaurant|dining|conference|venue|wedding|book(?:ing)?|guests?)\b/i,
   solar_security: /\b(?:solar|inverter|backup power|cctv|security|alarm|access control|electric fence)\b/i,
   healthcare: /\b(?:clinic|doctor|medical|healthcare|dentist|dental|treatment|patient|practice)\b/i,
   creative: /\b(?:web design|branding|marketing|advertising|creative|campaign|studio)\b/i,
@@ -148,7 +158,7 @@ const PRODUCT_CATEGORY_PATTERNS: PatternFact[] = [
   { value: "Solar accessories", pattern: /\bsolar accessories\b|\bcables? and connectors?\b|\bfuses?\b|\bdc isolators?\b|\bsolar tools?\b|\bmc4\b/i },
   { value: "Solar mounting systems", pattern: /\bsolar (?:panel )?mounting systems?\b|\brenusol\b|\bplas-sol\b|\beco mounting\b/i },
   { value: "Victron Energy products", pattern: /\bvictron(?: energy)?\b|\bvictron all products\b|\bvictron charge controllers?\b/i },
-  { value: "Camping power supplies", pattern: /\bcamping\b|\bpower supplies\b/i },
+  { value: "Camping power supplies", pattern: /\b(?:camping|portable|outdoor)\s+(?:power|solar|battery|inverter|supplies|equipment)\b|\bpower supplies\b/i },
   { value: "Specials and clearance", pattern: /\bspecials\b|\bclearance\b|\blimited stock\b|\bsale\b/i },
 ];
 
@@ -372,6 +382,7 @@ function dominantServiceFamilies(scraped: ScrapedWebsiteData, facts: SiteFactEvi
     "professional",
     "construction",
     "landscaping",
+    "hospitality",
     "solar_security",
     "healthcare",
     "creative",

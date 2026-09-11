@@ -263,10 +263,12 @@ function ecommerceCtaFromProducts(productCategories: string[]): string {
 }
 
 function hospitalityCtaFromContent(corpus: string): string {
-  if (/\b(restaurant|dining|menu|table|breakfast|lunch|dinner)\b/i.test(corpus)) {
+  const hasStayOffer = /\b(hotel|resort|lodge|guest house|guesthouse|accommodation|rooms?|suites?|camping stays?|camping stands?|campsites?|camp sites?|book (?:a )?room|book your stay)\b/i.test(corpus);
+  const hasDiningOffer = /\b(restaurant|dining|breakfast|lunch|dinner)\b/i.test(corpus) || /\b(?:view|food|drinks?)\s+menu\b/i.test(corpus);
+  if (hasDiningOffer && !hasStayOffer) {
     return "Reserve a Table";
   }
-  if (/\b(wedding|conference|event|venue|function)\b/i.test(corpus)) {
+  if (/\b(wedding|conference|event|venue|function)\b/i.test(corpus) && !hasStayOffer) {
     return "Enquire About Availability";
   }
   return "Check Availability";
