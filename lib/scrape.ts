@@ -36,6 +36,11 @@ const CTA_PHRASES = [
   "start building your cv",
   "free consultation",
   "request a quote",
+  "check availability",
+  "book direct",
+  "reserve a table",
+  "make a reservation",
+  "view menu",
   "request demo",
   "book a demo",
   "buy now",
@@ -670,7 +675,7 @@ function isLikelyCtaAnchorText(text: string): boolean {
 
   return (
     CTA_PHRASES.some((phrase) => lower.includes(phrase)) ||
-    /\b(book|schedule|quote|call|consult|demo|trial|apply|get started|sign up|contact|talk|speak|shop|cart|checkout|buy|order|product menu|shop our products|view product range|explore services|view services)\b/.test(
+    /\b(book|schedule|quote|call|consult|demo|trial|apply|get started|sign up|contact|talk|speak|shop|cart|checkout|buy|order|product menu|shop our products|view product range|explore services|view services|check availability|book direct|reserve a table|make a reservation|view menu)\b/.test(
       lower,
     )
   );
@@ -733,7 +738,7 @@ function normalizeDetectedCtaSignal(signal: string): string | null {
   }
 
   const matchedAction = cleaned.match(
-    /\b(book\s+(?:your\s+)?(?:free\s+)?(?:consultation|call)|schedule\s+(?:a\s+)?call|get\s+(?:a\s+)?quote|request\s+(?:a\s+)?quote|book\s+(?:a\s+)?demo|start\s+free\s+trial|get\s+started|sign\s+up|apply\s+now|buy\s+now|shop\s+now|shop\s+our\s+products|view\s+product\s+range|product\s+menu|call\s+us|talk\s+to\s+us|speak\s+to\s+an\s+advisor|send\s+message|contact\s+us|learn\s+more|view\s+services|explore\s+services)\b/i,
+    /\b(book\s+(?:your\s+)?(?:free\s+)?(?:consultation|call|stay|room)|schedule\s+(?:a\s+)?call|get\s+(?:a\s+)?quote|request\s+(?:a\s+)?quote|check\s+availability|book\s+direct|reserve\s+a\s+table|make\s+a\s+reservation|view\s+menu|book\s+(?:a\s+)?demo|start\s+free\s+trial|get\s+started|sign\s+up|apply\s+now|buy\s+now|shop\s+now|shop\s+our\s+products|view\s+product\s+range|product\s+menu|call\s+us|talk\s+to\s+us|speak\s+to\s+an\s+advisor|send\s+message|contact\s+us|learn\s+more|view\s+services|explore\s+services)\b/i,
   );
 
   return matchedAction ? matchedAction[0].toLowerCase() : cleaned.slice(0, 90);

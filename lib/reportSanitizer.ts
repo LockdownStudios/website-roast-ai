@@ -24,6 +24,7 @@ const DOMAIN_FAMILY_PATTERNS: Array<{ family: string; pattern: RegExp }> = [
   { family: "landscaping", pattern: /\b(?:landscap(?:e|ing)|garden maintenance|instant lawn|tree felling|irrigation|water features?|bomas?)\b/i },
   { family: "solar_security", pattern: /\b(?:solar|inverter|battery|batteries|backup power|cctv|security|alarm|access control|electric fence)\b/i },
   { family: "healthcare", pattern: /\b(?:clinic|doctor|medical|healthcare|dentist|dental|patient|treatment|practice)\b/i },
+  { family: "hospitality", pattern: /\b(?:hotel|resort|lodge|accommodation|guest house|guesthouse|restaurant|dining|menu|reserve a table|reservation|book direct|check availability|venue|camping|campsite|tourism)\b/i },
   { family: "creative", pattern: /\b(?:web design|branding|marketing|creative agency|studio|advertising|campaign)\b/i },
 ];
 
@@ -127,6 +128,7 @@ function supportedDomainFamilies(scraped: ScrapedWebsiteData | undefined): Set<s
   const niche = inferSiteNiche(scraped);
   if (niche === "professional_service") supported.add("professional");
   if (niche === "healthcare") supported.add("healthcare");
+  if (niche === "hospitality") supported.add("hospitality");
   if (niche === "creative_agency") supported.add("creative");
   if (niche === "ecommerce") supported.add("solar_security");
 

@@ -50,6 +50,7 @@ Rules:
 - Output a claim contract that maps key claims to concrete evidence snippets
 - Never recommend "Shop Now" unless the detected niche is Ecommerce and the evidence includes real shopping/cart/checkout intent
 - For local service, professional service, healthcare, and agency sites, recommend quote, booking, consultation, call, or appointment actions
+- For hospitality/tourism sites, recommend the action that matches the business: Check Availability or Book Direct for lodges/hotels/resorts, Reserve a Table or View Menu for restaurants, and Enquire About Availability for event venues.
 - For Ecommerce, judge product discovery, category clarity, pricing/VAT clarity, cart/checkout confidence, delivery, returns/warranty, reviews, brand proof, stock clarity, and buyer help. Do not talk about service enquiries, completed-work galleries, site visits, or quote forms unless the evidence says the store also sells services.
 
 Return valid JSON only.`;
@@ -519,8 +520,8 @@ Return JSON in this exact format:
   "score": number,
   "score_label": "string",
   "diagnosis": {
-    "businessModel": "local_service|professional_service|ecommerce|healthcare|b2b_consulting|construction_trade|creative_agency|franchise_location|saas_platform|public_enterprise|other",
-    "siteGoal": "sell_online|generate_calls|book_consultations|capture_quote_requests|build_credibility|explain_complex_services|support_existing_customers|recruit_partners|drive_trials_or_demos",
+    "businessModel": "local_service|professional_service|ecommerce|healthcare|hospitality|b2b_consulting|construction_trade|creative_agency|franchise_location|saas_platform|public_enterprise|other",
+    "siteGoal": "sell_online|generate_calls|book_consultations|drive_direct_bookings|drive_reservations|capture_quote_requests|build_credibility|explain_complex_services|support_existing_customers|recruit_partners|drive_trials_or_demos",
     "buyerAnxieties": ["credibility|qualification|price_uncertainty|location_fit|product_fit|response_time|risk|next_step|delivery_or_warranty|privacy_or_compliance"],
     "primaryPainpoints": ["weak_offer_clarity|wrong_cta_for_intent|thin_authority_proof|missing_price_expectation|poor_product_discovery|weak_checkout_reassurance|no_service_area_confidence|flat_visual_hierarchy|navigation_hides_money_pages|interchangeable_copy|missing_process_explanation|weak_urgency|no_comparison_argument|poor_mobile_scanning|missing_high_friction_faqs|underused_trust_assets|strong_site_minor_leaks|thin_customer_support_path|unclear_buyer_fit"],
     "summary": "string",
@@ -569,6 +570,8 @@ Output constraints:
 - each quick_fix should follow this structure: "Where: ... | Fix: ... | Example: ..."
 - If the detected CTA is weak or mismatched for the site goal, do not recommend standardizing it. Recommend the goal-led CTA from the site context instead.
 - Do not recommend "Shop Now" unless the niche is Ecommerce and the evidence shows cart, checkout, buying, or shopping signals. Service businesses need quote/book/call/consultation actions.
+- If Detected niche is Hospitality / Tourism, use hospitality language: guests, bookings, availability, rooms, rates, restaurant menus, table reservations, venues, amenities, reviews, location, and direct booking confidence. Do not recommend "Request a Quote" unless the evidence is mainly venue/event hire.
+- Lodges, hotels, guest houses, resorts, and accommodation sites normally need "Check Availability" or "Book Direct". Restaurants normally need "Reserve a Table" or "View Menu". Event venues normally need "Enquire About Availability".
 - If Detected niche is Ecommerce, use ecommerce language: shoppers, products, categories, carts, checkout, delivery, warranty, stock, reviews, product cards, buying confidence. Avoid service-lead language such as completed-work proof, quote ask, enquiry quality, or site visits unless that exact service path is visible.
 - Only use mobile-game/app language when Detected niche is Mobile Game and the dossier shows app-store, download, install, gameplay, or player evidence.
 - Never write "Download The App", "mobile players", "mobile game buyers", "install the app", or "start playing" for local service, construction, landscaping, professional service, healthcare, agency, ecommerce, or generic sites.

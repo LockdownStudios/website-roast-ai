@@ -56,7 +56,7 @@ type ViewportRawMetrics = Omit<
 >;
 
 const CTA_REGEX_SOURCE =
-  "(book|schedule|quote|consult|call|apply|start|sign\\s*up|get\\s*started|trial|buy\\s*now|shop\\s*now|contact|talk|speak|demo)";
+  "(book|schedule|quote|consult|call|apply|start|sign\\s*up|get\\s*started|trial|buy\\s*now|shop\\s*now|contact|talk|speak|demo|check\\s+availability|book\\s+direct|reserve\\s+a\\s+table|make\\s+a\\s+reservation|view\\s+menu)";
 
 const VIEWPORTS: ViewportPreset[] = [
   {

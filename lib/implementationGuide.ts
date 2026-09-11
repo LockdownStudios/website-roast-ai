@@ -114,6 +114,11 @@ const NICHE_DEFAULTS: Record<SiteNiche, NicheDefaults> = {
     outcome: "book the right appointment quickly",
     fallbackCta: "Book an Appointment",
   },
+  hospitality: {
+    audience: "travellers, diners, and event guests",
+    outcome: "check availability or reserve without friction",
+    fallbackCta: "Check Availability",
+  },
   creative_agency: {
     audience: "brands looking for growth assets",
     outcome: "launch stronger campaigns faster",
@@ -232,6 +237,22 @@ function productLabelFromFacts(productCategories: string[], fallback: string): s
   return cleanedFallback ? cleanedFallback.toLowerCase() : "product range";
 }
 
+function hospitalityLabelFromFacts(scraped: ScrapedWebsiteData, fallback: string): string {
+  const corpus = [
+    scraped.title,
+    scraped.description,
+    scraped.headings.h1.join(" "),
+    scraped.headings.h2.join(" "),
+    scraped.contentSnippet,
+  ].join(" ");
+  if (/\brestaurant|dining|menu|table\b/i.test(corpus)) return "hospitality booking and dining";
+  if (/\bwedding|conference|event|venue|function\b/i.test(corpus)) return "venue and event enquiries";
+  if (/\bcamping|campsite|camp site\b/i.test(corpus)) return "accommodation and camping bookings";
+  return fallback.toLowerCase().includes("hotel") || fallback.toLowerCase().includes("resort")
+    ? "direct accommodation bookings"
+    : "hospitality bookings";
+}
+
 function ecommerceCtaFromProducts(productCategories: string[]): string {
   const joined = productCategories.join(" ").toLowerCase();
   if (/\bsolar system kits?\b|\bsolar kits?\b/.test(joined)) return "Shop Solar Kits";
@@ -239,6 +260,16 @@ function ecommerceCtaFromProducts(productCategories: string[]): string {
   if (/\bbatteries\b|\blithium\b/.test(joined)) return "Shop Batteries";
   if (/\bsolar panels?\b/.test(joined)) return "Shop Solar Panels";
   return "View Product Range";
+}
+
+function hospitalityCtaFromContent(corpus: string): string {
+  if (/\b(restaurant|dining|menu|table|breakfast|lunch|dinner)\b/i.test(corpus)) {
+    return "Reserve a Table";
+  }
+  if (/\b(wedding|conference|event|venue|function)\b/i.test(corpus)) {
+    return "Enquire About Availability";
+  }
+  return "Check Availability";
 }
 
 function locationLabelFromFacts(locations: string[]): string {
@@ -268,6 +299,8 @@ function weakOrMismatchedCtaForNiche(
       return !/\b(book|schedule)\b.*\b(consultation|call|conversation)\b|\bfree consultation\b/.test(normalized);
     case "healthcare":
       return !/\b(book|schedule)\b.*\b(appointment|visit|consultation|call)\b|\bbook now\b|\bcall now\b/.test(normalized);
+    case "hospitality":
+      return !/\b(check availability|book now|book direct|reserve a table|make a reservation|view menu|enquire about availability)\b/.test(normalized);
     case "creative_agency":
       return !/\b(book|schedule)\b.*\b(discovery|call|consultation|brief)\b|\bfree consultation\b|\brequest\s+(a\s+)?quote\b/.test(normalized);
     case "mobile_game":
@@ -284,9 +317,19 @@ function ctaRecommendation(
   niche: SiteNiche,
   defaults: NicheDefaults,
   productCategories: string[] = [],
+  scraped?: ScrapedWebsiteData,
 ): { label: string; source: "detected" | "recommended"; reason: string } {
   const fallbackCta = niche === "ecommerce"
     ? ecommerceCtaFromProducts(productCategories)
+    : niche === "hospitality"
+      ? hospitalityCtaFromContent([
+          scraped?.title,
+          scraped?.description,
+          scraped?.headings.h1.join(" "),
+          scraped?.headings.h2.join(" "),
+          scraped?.contentSnippet,
+          productCategories.join(" "),
+        ].filter(Boolean).join(" "))
     : defaults.fallbackCta;
 
   if (!detectedCta) {
@@ -306,6 +349,8 @@ function ctaRecommendation(
           ? `"${detectedCta}" points at a conversation, but a mobile game page should push players to install or start playing`
           : niche === "ecommerce"
             ? `"${detectedCta}" is not a buying action for shoppers`
+          : niche === "hospitality"
+            ? `"${detectedCta}" is not a booking or reservation action for hospitality visitors`
           : `"${detectedCta}" is too soft or generic for the page goal`,
     };
   }
@@ -334,6 +379,7 @@ function makeContext(
     niche,
     defaults,
     snapshot.productCategories,
+    scraped,
   );
 
   return {
@@ -350,6 +396,8 @@ function makeContext(
     serviceLabel:
       niche === "ecommerce"
         ? productLabelFromFacts(snapshot.productCategories, snapshot.offerHeadline)
+        : niche === "hospitality"
+          ? hospitalityLabelFromFacts(scraped, snapshot.offerHeadline)
         : serviceLabelFromFacts(snapshot.services, snapshot.offerHeadline),
     locationLabel: locationLabelFromFacts(snapshot.locations),
     offerLabel: snapshot.offerHeadline,

@@ -7,6 +7,7 @@ export type SiteNiche =
   | "local_service"
   | "professional_service"
   | "healthcare"
+  | "hospitality"
   | "creative_agency"
   | "mobile_game"
   | "public_enterprise"
@@ -138,6 +139,41 @@ const NICHE_RULES: NicheRule[] = [
       "physiotherapy",
       "physio",
       "practice",
+    ],
+  },
+  {
+    niche: "hospitality",
+    label: "Hospitality / Tourism",
+    keywords: [
+      "hotel",
+      "resort",
+      "lodge",
+      "lodging",
+      "accommodation",
+      "guest house",
+      "guesthouse",
+      "bed and breakfast",
+      "b&b",
+      "rooms",
+      "room rates",
+      "suites",
+      "cabins",
+      "camping",
+      "campsite",
+      "restaurant",
+      "dining",
+      "menu",
+      "reserve a table",
+      "reservation",
+      "book now",
+      "check availability",
+      "things to do",
+      "conference venue",
+      "wedding venue",
+      "spa",
+      "game lodge",
+      "rainforest",
+      "tourism",
     ],
   },
   {
@@ -304,6 +340,19 @@ const VISUAL_THRESHOLDS_BY_NICHE: Record<SiteNiche, VisualThresholdProfile> = {
     consistencyStrong: 80,
     motionHigh: 35,
     motionLow: 8,
+  },
+  hospitality: {
+    label: "Hospitality / Tourism",
+    ctaWeak: 46,
+    ctaStrong: 78,
+    readabilityWeak: 52,
+    readabilityStrong: 80,
+    hierarchyWeak: 48,
+    hierarchyStrong: 78,
+    consistencyWeak: 42,
+    consistencyStrong: 76,
+    motionHigh: 52,
+    motionLow: 18,
   },
   creative_agency: {
     label: "Creative Agency",
@@ -501,6 +550,14 @@ export function inferSiteNiche(scraped: ScrapedWebsiteData): SiteNiche {
   }
 
   if (
+    scores.hospitality >= 2 &&
+    scores.hospitality >= scores.ecommerce &&
+    scores.hospitality >= scores[serviceNiche]
+  ) {
+    return "hospitality";
+  }
+
+  if (
     scores.saas >= 3 &&
     scores.saas >= scores.ecommerce &&
     scores.saas >= scores[serviceNiche]
@@ -544,6 +601,7 @@ const SERVICE_NICHES: SiteNiche[] = [
   "local_service",
   "professional_service",
   "healthcare",
+  "hospitality",
   "creative_agency",
 ];
 
@@ -594,6 +652,11 @@ const SERVICE_INTENT_SIGNALS = [
   "book consultation",
   "book a consultation",
   "book appointment",
+  "book now",
+  "reserve a table",
+  "reservation",
+  "check availability",
+  "view menu",
   "schedule a call",
   "free consultation",
   "service area",
@@ -617,6 +680,7 @@ function keywordHitCount(corpus: string, keywords: string[]): number {
 function ctaStrength(cta: string): number {
   const lower = cta.toLowerCase();
   if (/\b(add to cart|checkout|buy now|shop now|shop our products|view product range)\b/.test(lower)) return 100;
+  if (/\b(check availability|book now|book direct|reserve a table|make a reservation|view menu)\b/.test(lower)) return 98;
   if (/\b(get|request)\s+(a\s+)?quote\b|\bbook\b|\bschedule\b|\bconsultation\b/.test(lower)) return 96;
   if (/\b(call now|call us|whatsapp|talk to us|speak to)\b/.test(lower)) return 82;
   if (/\b(contact us|contact|get in touch|send message)\b/.test(lower)) return 42;
@@ -638,7 +702,7 @@ function serviceIntentScore(
 ): number {
   return (
     keywordHitCount(corpus, SERVICE_INTENT_SIGNALS) +
-    keywordHitCount(ctaCorpus, ["quote", "book", "consultation", "appointment", "call", "contact"]) +
+    keywordHitCount(ctaCorpus, ["quote", "book", "consultation", "appointment", "call", "contact", "reservation", "availability"]) +
     Math.min(scraped.contactSignals.length, 2)
   );
 }

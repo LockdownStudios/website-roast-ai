@@ -16,6 +16,7 @@ const BUSINESS_MODEL_LABELS: Record<RoastBusinessModel, string> = {
   professional_service: "Professional service",
   ecommerce: "Ecommerce",
   healthcare: "Healthcare",
+  hospitality: "Hospitality / tourism",
   b2b_consulting: "B2B consulting",
   construction_trade: "Construction trade",
   creative_agency: "Creative agency",
@@ -29,6 +30,8 @@ const SITE_GOAL_LABELS: Record<RoastSiteGoal, string> = {
   sell_online: "Sell online",
   generate_calls: "Generate calls",
   book_consultations: "Book consultations",
+  drive_direct_bookings: "Drive direct bookings",
+  drive_reservations: "Drive reservations",
   capture_quote_requests: "Capture quote requests",
   build_credibility: "Build credibility",
   explain_complex_services: "Explain complex services",
@@ -139,14 +142,23 @@ export function diagnosisQuickFixes(
       case "weak_checkout_reassurance":
         return `Where: First buying path | Fix: Put payment, delivery, warranty, return, and support reassurance beside the first product action. | Example: Add a compact trust row under the first "Buy" or "Add to Cart" action.`;
       case "missing_price_expectation":
+        if (diagnosis.businessModel === "hospitality") {
+          return `Where: Room, package, restaurant, or venue blocks | Fix: Show availability, rates, booking expectations, or menu/venue enquiry cues before visitors reach contact. | Example: Add "Check Availability" with dates, guest count, and direct booking reassurance.`;
+        }
         return `Where: Offer and service/product blocks | Fix: Give buyers a price expectation, quote boundary, or decision range before asking for contact. | Example: Add "Request a quote with site details" or "From/typical range" copy where exact pricing is not possible.`;
       case "missing_process_explanation":
         return `Where: Main service section | Fix: Explain the working process in 3 to 4 steps so the buyer knows what happens after the enquiry. | Example: Enquire, assess, quote, complete the work.`;
       case "no_service_area_confidence":
         return `Where: Hero, contact block, and footer | Fix: State the served areas clearly so local buyers know they qualify. | Example: "${service}${location}" plus nearby areas and response expectations.`;
       case "thin_authority_proof":
+        if (diagnosis.businessModel === "hospitality") {
+          return `Where: First screen and booking path | Fix: Move guest proof closer to the booking decision. | Example: Show room/gallery highlights, review snippets, location appeal, amenities, and direct-booking reassurance under "${offer}".`;
+        }
         return `Where: First screen and first CTA | Fix: Move proof closer to the decision point. | Example: Show reviews, credentials, completed work, client outcomes, or guarantees directly under "${offer}".`;
       case "wrong_cta_for_intent":
+        if (diagnosis.businessModel === "hospitality") {
+          return `Where: Hero, nav, room/restaurant blocks, and final section | Fix: Use the booking action that matches the visitor intent. | Example: Lodges use "Check Availability"; restaurants use "Reserve a Table"; venues use "Enquire About Availability".`;
+        }
         return `Where: Hero, nav, mobile sticky action, and final section | Fix: Use one goal-led primary action everywhere. | Example: Button text = "${cta}" with microcopy that explains what happens next.`;
       case "flat_visual_hierarchy":
         return `Where: Above the fold | Fix: Make the offer, proof, and primary action visually dominant before secondary content competes. | Example: One headline, one proof strip, one high-contrast "${cta}" button.`;
@@ -197,6 +209,7 @@ function inferBusinessModel(niche: SiteNiche, scraped: ScrapedWebsiteData): Roas
 
   if (niche === "ecommerce") return "ecommerce";
   if (niche === "healthcare") return "healthcare";
+  if (niche === "hospitality") return "hospitality";
   if (niche === "creative_agency") return "creative_agency";
   if (niche === "saas") return "saas_platform";
   if (niche === "public_enterprise") return "public_enterprise";
@@ -219,6 +232,11 @@ function inferSiteGoal(
 ): RoastSiteGoal {
   const text = [siteText(scraped), primaryCta].join(" ");
   if (niche === "ecommerce") return "sell_online";
+  if (niche === "hospitality") {
+    return /\b(restaurant|dining|menu|table|reserve)\b/i.test(text)
+      ? "drive_reservations"
+      : "drive_direct_bookings";
+  }
   if (niche === "saas") return /\btrial|demo\b/i.test(text) ? "drive_trials_or_demos" : "build_credibility";
   if (/\b(book|appointment|consultation|schedule)\b/i.test(text)) return "book_consultations";
   if (/\b(quote|estimate|proposal)\b/i.test(text)) return "capture_quote_requests";
@@ -254,6 +272,11 @@ function inferBuyerAnxieties(
   } else if (model === "local_service" || model === "construction_trade") {
     anxieties.add("location_fit");
     anxieties.add("response_time");
+    anxieties.add("risk");
+  } else if (model === "hospitality") {
+    anxieties.add("credibility");
+    anxieties.add("price_uncertainty");
+    anxieties.add("next_step");
     anxieties.add("risk");
   }
 
@@ -301,6 +324,17 @@ function inferPainPoints(
   if (model === "local_service" || model === "construction_trade") {
     if ((facts?.locations.length ?? 0) === 0) painPoints.add("no_service_area_confidence");
     painPoints.add("missing_process_explanation");
+  }
+
+  if (model === "hospitality") {
+    painPoints.add("thin_authority_proof");
+    painPoints.add("wrong_cta_for_intent");
+    if (!/\b(rate|rates|price|from|availability|book now|reservation|reserve|menu)\b/i.test(text)) {
+      painPoints.add("missing_price_expectation");
+    }
+    if (!/\b(gallery|photos|rooms|amenities|facilities|menu|reviews?|tripadvisor|google reviews)\b/i.test(text)) {
+      painPoints.add("underused_trust_assets");
+    }
   }
 
   if (goal === "build_credibility" && painPoints.size < 3) painPoints.add("no_comparison_argument");

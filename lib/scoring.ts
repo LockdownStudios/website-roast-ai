@@ -123,6 +123,7 @@ function expectedCtaGoal(niche: string): CtaGoal | null {
     case "professional_service":
       return "consultation";
     case "healthcare":
+    case "hospitality":
       return "booking";
     case "mobile_game":
       return "download";
@@ -141,6 +142,8 @@ function expectedCtaLabel(niche: string): string {
       return "Book a Consultation";
     case "healthcare":
       return "Book an Appointment";
+    case "hospitality":
+      return "Check Availability";
     case "creative_agency":
       return "Book a Discovery Call";
     case "mobile_game":
@@ -162,7 +165,7 @@ function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
     case "quote":
       return /\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(lower);
     case "booking":
-      return /\b(book|schedule)\b.*\b(appointment|visit|call|consultation)\b|\bbook now\b|\bcall now\b/.test(lower);
+      return /\b(check availability|book direct|reserve a table|make a reservation|view menu)\b|\b(book|schedule)\b.*\b(appointment|visit|call|consultation|room|stay|table)\b|\bbook now\b|\bcall now\b/.test(lower);
     case "consultation":
       return /\b(book|schedule)\b.*\b(consultation|call|discovery|conversation)\b|\bfree consultation\b/.test(lower);
     case "download":
