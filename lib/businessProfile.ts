@@ -91,7 +91,8 @@ export function inferJourneyIntent(
   cta: Pick<ObservedCta, "label" | "destination">,
   pageText = "",
 ): CustomerJourneyIntent {
-  const text = `${cta.label} ${cta.destination ?? ""} ${pageText}`.toLowerCase();
+  // Page headings describe other journeys too; only use them to disambiguate Book Now.
+  const text = `${cta.label} ${cta.destination ?? ""}`.toLowerCase();
   if (/\b(add to cart|checkout|buy now|shop now|order now|purchase)\b/.test(text)) return "purchase";
   if (/\b(reserve (?:a )?table|table reservation|book (?:a )?table)\b/.test(text)) return "reserve_table";
   if (/\b(view|see|download) (?:the )?menu\b/.test(text)) return "view_menu";
@@ -105,8 +106,10 @@ export function inferJourneyIntent(
   if (/\bcall now|call us|phone|tel:|whatsapp\b/.test(text)) return "call";
   if (/\bcontact|send message|get in touch|talk to us|speak to\b/.test(text)) return "contact";
   if (/\bbook now\b/.test(text)) {
-    if (/\b(room|stay|suite|hotel|lodge|resort|accommodation)\b/.test(text)) return "book_stay";
-    if (/\b(restaurant|dining|table|menu)\b/.test(text)) return "reserve_table";
+    const context = pageText.toLowerCase();
+    if (/\b(salon|treatment|beauty|appointment)\b/.test(context)) return "book_appointment";
+    if (/\b(room|stay|suite|hotel|lodge|resort|accommodation|chalet|chalets|camping)\b/.test(context)) return "book_stay";
+    if (/\b(restaurant|dining|table|menu)\b/.test(context)) return "reserve_table";
     return "unknown";
   }
   if (/\blearn more|read more|explore|view\b/.test(text)) return "learn";
