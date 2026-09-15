@@ -32,6 +32,8 @@ import type {
   VisualViewportMetrics,
   WebsiteScoring,
 } from "./types";
+import { buildBusinessProfile, buildCustomerJourneys } from "./businessProfile";
+import { LEGACY_ROAST_REPORT_CONTRACT_VERSION } from "./reportContract";
 import {
   findRoastReportByUrlAndHashFromSupabase,
   getRecoverableReportIdsByEmailFromSupabase,
@@ -160,6 +162,10 @@ function normalizeCrawl(
                 typeof parsed.title === "string" && parsed.title.trim()
                   ? parsed.title.trim().slice(0, 180)
                   : "No title found.",
+              description:
+                typeof parsed.description === "string" && parsed.description.trim()
+                  ? parsed.description.trim().slice(0, 320)
+                  : undefined,
               primaryHeading:
                 typeof parsed.primaryHeading === "string" &&
                 parsed.primaryHeading.trim()
@@ -168,14 +174,50 @@ function normalizeCrawl(
               contentSnippet:
                 typeof parsed.contentSnippet === "string" &&
                 parsed.contentSnippet.trim()
-                  ? parsed.contentSnippet.trim().slice(0, 900)
+                  ? parsed.contentSnippet.trim().slice(0, 1400)
+                  : undefined,
+              headings: normalizeStringList(parsed.headings).slice(0, 12),
+              ctas: normalizeStringList(parsed.ctas).slice(0, 8),
+              ctaEvidence: Array.isArray(parsed.ctaEvidence)
+                ? parsed.ctaEvidence.flatMap((cta) => {
+                    if (!cta || typeof cta !== "object") return [];
+                    const item = cta as Partial<NonNullable<typeof parsed.ctaEvidence>[number]>;
+                    if (typeof item.label !== "string" || !item.label.trim()) return [];
+                    const allowedTypes = new Set([
+                      "same_origin", "external", "phone", "email", "whatsapp", "page_action", "unknown",
+                    ]);
+                    return [{
+                      label: item.label.trim().slice(0, 160),
+                      destination:
+                        typeof item.destination === "string" && item.destination.trim()
+                          ? item.destination.trim().slice(0, 700)
+                          : undefined,
+                      destinationType: allowedTypes.has(String(item.destinationType))
+                        ? item.destinationType!
+                        : "unknown" as const,
+                      sourceUrl: url,
+                    }];
+                  }).slice(0, 12)
+                : undefined,
+              trustSignals: normalizeStringList(parsed.trustSignals).slice(0, 8),
+              contactSignals: normalizeStringList(parsed.contactSignals).slice(0, 6),
+              extractionMode:
+                parsed.extractionMode === "rendered"
+                  ? ("rendered" as const)
+                  : ("static" as const),
+              discoveredFrom:
+                parsed.discoveredFrom === "entry" ||
+                parsed.discoveredFrom === "navigation" ||
+                parsed.discoveredFrom === "sitemap" ||
+                parsed.discoveredFrom === "linked_page"
+                  ? parsed.discoveredFrom
                   : undefined,
               contentLength: clampInteger(parsed.contentLength, 0, 150000),
               headingCount: clampInteger(parsed.headingCount, 0, 200),
             },
           ];
         })
-        .slice(0, 8)
+        .slice(0, 10)
     : [];
 
   const visitedFromPayload = normalizeStringList(raw.visitedUrls)
@@ -198,13 +240,67 @@ function normalizeCrawl(
 
   return {
     strategy,
-    pageCount: clampInteger(raw.pageCount ?? visitedUrls.length, 1, 8),
+    pageCount: clampInteger(raw.pageCount ?? visitedUrls.length, 1, 10),
     visitedUrls,
     failedUrls: normalizeStringList(raw.failedUrls)
       .map((item) => item.slice(0, 500))
       .filter(Boolean)
-      .slice(0, 8),
+      .slice(0, 10),
+    failures: Array.isArray(raw.failures)
+      ? raw.failures
+          .flatMap((failure) => {
+            if (!failure || typeof failure !== "object") return [];
+            const item = failure as { url?: unknown; reason?: unknown };
+            if (typeof item.url !== "string" || !item.url.trim()) return [];
+            return [{
+              url: item.url.trim().slice(0, 500),
+              reason:
+                typeof item.reason === "string" && item.reason.trim()
+                  ? item.reason.trim().slice(0, 240)
+                  : "Unknown fetch failure",
+            }];
+          })
+          .slice(0, 10)
+      : undefined,
+    coverage: normalizeCrawlCoverage(raw.coverage, pages.length, visitedUrls.length),
     pages,
+  };
+}
+
+function normalizeCrawlCoverage(
+  value: CrawlSummary["coverage"] | unknown,
+  reviewedPageCount: number,
+  attemptedPageCount: number,
+): CrawlSummary["coverage"] {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as NonNullable<CrawlSummary["coverage"]>;
+  const discoveredPageCount = clampInteger(
+    raw.discoveredPageCount ?? attemptedPageCount,
+    Math.max(1, reviewedPageCount),
+    10000,
+  );
+  const attempted = clampInteger(
+    raw.attemptedPageCount ?? attemptedPageCount,
+    1,
+    100,
+  );
+  const reviewed = clampInteger(
+    raw.reviewedPageCount ?? reviewedPageCount,
+    1,
+    100,
+  );
+  return {
+    discoveredPageCount,
+    attemptedPageCount: attempted,
+    reviewedPageCount: reviewed,
+    maxPages: clampInteger(raw.maxPages ?? 10, 1, 100),
+    selectionMode:
+      raw.selectionMode === "representative_sample"
+        ? "representative_sample"
+        : "all_discovered",
+    truncated: Boolean(raw.truncated),
+    skippedUrls: normalizeStringList(raw.skippedUrls).slice(0, 30),
+    durationMs: clampInteger(raw.durationMs, 0, 600000),
   };
 }
 
@@ -395,6 +491,10 @@ function normalizeVisualViewport(
     uniqueFontFamilies: clampInteger(raw.uniqueFontFamilies, 0, 40),
     animatedElementShare: clampOne(raw.animatedElementShare, 0, 1),
     autoplayMediaCount: clampInteger(raw.autoplayMediaCount, 0, 50),
+    screenshotHash:
+      typeof raw.screenshotHash === "string" && /^[a-f0-9]{64}$/i.test(raw.screenshotHash)
+        ? raw.screenshotHash.toLowerCase()
+        : undefined,
   };
 }
 
@@ -436,6 +536,17 @@ function normalizeVisualAudit(value: unknown): VisualAudit | undefined {
         : undefined,
     desktop,
     mobile,
+    keyPages: Array.isArray(raw.keyPages)
+      ? raw.keyPages.flatMap((page) => {
+          if (!page || typeof page !== "object") return [];
+          const item = page as { url?: unknown; desktop?: unknown };
+          if (typeof item.url !== "string" || !item.url.trim()) return [];
+          const keyPageDesktop = normalizeVisualViewport(item.desktop, "desktop");
+          return keyPageDesktop
+            ? [{ url: item.url.trim().slice(0, 500), desktop: keyPageDesktop }]
+            : [];
+        }).slice(0, 2)
+      : undefined,
     summary: normalizeVisualSummary(raw.summary),
     findings: normalizeStringList(raw.findings).slice(0, 12),
     evidence: normalizeStringList(raw.evidence).slice(0, 12),
@@ -467,7 +578,7 @@ function normalizeScraped(
   const trustSignals = normalizeStringList(value.trustSignals);
   const crawl = normalizeCrawl(value.crawl, normalizedUrl);
 
-  return {
+  const normalized: ScrapedWebsiteData = {
     url: normalizedUrl,
     title:
       typeof value.title === "string" && value.title.trim()
@@ -519,6 +630,12 @@ function normalizeScraped(
       value.scrapeQuality === "low"
         ? value.scrapeQuality
         : inferScrapeQuality(contentLength),
+  };
+  const journeys = buildCustomerJourneys(normalized);
+  return {
+    ...normalized,
+    journeys,
+    businessProfile: buildBusinessProfile(normalized, journeys),
   };
 }
 
@@ -611,6 +728,17 @@ function normalizeClaimSeverity(value: unknown): RoastClaimSeverity {
   return "medium";
 }
 
+function normalizeClaimTarget(value: unknown): RoastClaim["target"] {
+  return value === "first_impression" ||
+    value === "single_biggest_leak" ||
+    value === "mistake" ||
+    value === "lost_customers" ||
+    value === "high_impact" ||
+    value === "score"
+    ? value
+    : undefined;
+}
+
 function normalizeClaimContract(value: unknown): RoastClaim[] {
   if (!Array.isArray(value)) {
     return [];
@@ -641,6 +769,15 @@ function normalizeClaimContract(value: unknown): RoastClaim[] {
           evidence,
           source: normalizeClaimSource(raw.source),
           severity: normalizeClaimSeverity(raw.severity),
+          target: normalizeClaimTarget(raw.target),
+          sourceUrl:
+            typeof raw.sourceUrl === "string" && raw.sourceUrl.trim()
+              ? raw.sourceUrl.trim().slice(0, 500)
+              : undefined,
+          certainty:
+            raw.certainty === "observed" || raw.certainty === "inference"
+              ? raw.certainty
+              : undefined,
         } satisfies RoastClaim,
       ];
     })
@@ -698,12 +835,17 @@ function normalizeRoast(roast: unknown): RoastResultPayload | null {
   const quickFixes = normalizeStringList(value.quick_fixes);
   const evidence = normalizeStringList(value.evidence);
   const claimContract = normalizeClaimContract(value.claim_contract);
+  const generation = normalizeGenerationMetadata(value.generation);
   const leak =
     typeof value.single_biggest_leak === "string" && value.single_biggest_leak.trim()
       ? value.single_biggest_leak.trim()
       : "The page does not convert intent into action.";
 
   return {
+    contractVersion:
+      typeof value.contractVersion === "string" && value.contractVersion.trim()
+        ? value.contractVersion.trim().slice(0, 80)
+        : LEGACY_ROAST_REPORT_CONTRACT_VERSION,
     score: numericScore,
     score_label: isScoreLabel(value.score_label)
       ? value.score_label
@@ -738,7 +880,38 @@ function normalizeRoast(roast: unknown): RoastResultPayload | null {
         ? evidence
         : ["No detailed evidence captured in this report version."],
     claim_contract: claimContract.length > 0 ? claimContract : undefined,
+    generation,
     access: normalizeRoastAccess(value.access),
+  };
+}
+
+function normalizeGenerationMetadata(
+  value: RoastResultPayload["generation"] | unknown,
+): RoastResultPayload["generation"] {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as NonNullable<RoastResultPayload["generation"]>;
+  if (raw.mode !== "ai" && raw.mode !== "hybrid" && raw.mode !== "fallback") {
+    return undefined;
+  }
+
+  const reason =
+    raw.reason === "model_unavailable" ||
+    raw.reason === "model_error" ||
+    raw.reason === "validation_failed"
+      ? raw.reason
+      : undefined;
+
+  return {
+    mode: raw.mode,
+    model:
+      typeof raw.model === "string" && raw.model.trim()
+        ? raw.model.trim().slice(0, 100)
+        : undefined,
+    reason,
+    validationIssues: normalizeStringList(raw.validationIssues).slice(0, 20),
   };
 }
 

@@ -55,6 +55,7 @@ const BUYER_ANXIETY_LABELS: Record<RoastBuyerAnxiety, string> = {
 
 const PAIN_POINT_LABELS: Record<RoastPainPoint, string> = {
   weak_offer_clarity: "Weak offer clarity",
+  unclear_conversion_path: "Unclear conversion path",
   wrong_cta_for_intent: "Wrong CTA for buyer intent",
   thin_authority_proof: "Thin authority proof",
   missing_price_expectation: "Missing price expectation",
@@ -83,8 +84,8 @@ export function diagnoseWebsite(
   const blueprint = buildImplementationBlueprint(scraped, scoring);
   const businessModel = inferBusinessModel(context.niche, scraped);
   const siteGoal = inferSiteGoal(context.niche, scraped, blueprint.primaryCta);
-  const buyerAnxieties = inferBuyerAnxieties(businessModel, scraped, scoring);
-  const primaryPainpoints = inferPainPoints(businessModel, siteGoal, scraped, scoring);
+  const primaryPainpoints = inferPainPoints(businessModel, scraped, scoring);
+  const buyerAnxieties = inferBuyerAnxieties(primaryPainpoints, scoring);
   const evidence = [
     context.companyName ? `Company detected: ${context.companyName}` : "",
     `Offer/headline: ${context.offerHeadline}`,
@@ -101,11 +102,13 @@ export function diagnoseWebsite(
     siteGoal,
     buyerAnxieties,
     primaryPainpoints,
-    summary: `${businessModelLabel(businessModel)} site whose main job is to ${siteGoalLabel(siteGoal).toLowerCase()}. The roast should focus on ${primaryPainpoints
-      .slice(0, 3)
-      .map(painPointLabel)
-      .join(", ")
-      .toLowerCase()}, using only the extracted site evidence.`,
+    summary: primaryPainpoints.length > 0
+      ? `${businessModelLabel(businessModel)} site whose main job is to ${siteGoalLabel(siteGoal).toLowerCase()}. The observed evidence points to ${primaryPainpoints
+          .slice(0, 3)
+          .map(painPointLabel)
+          .join(", ")
+          .toLowerCase()}.`
+      : `${businessModelLabel(businessModel)} site whose main job is to ${siteGoalLabel(siteGoal).toLowerCase()}. No material painpoint was established by the current scan.`,
     evidence: evidence.slice(0, 6),
     confidence: scoring.confidence >= 70 ? "high" : scoring.confidence >= 45 ? "medium" : "low",
   };
@@ -116,7 +119,7 @@ export function diagnosisPromptBlock(diagnosis: RoastDiagnosis): string {
 - Business model: ${businessModelLabel(diagnosis.businessModel)} (${diagnosis.businessModel})
 - Site goal: ${siteGoalLabel(diagnosis.siteGoal)} (${diagnosis.siteGoal})
 - Buyer anxieties: ${diagnosis.buyerAnxieties.map(buyerAnxietyLabel).join(" | ")}
-- Primary painpoints: ${diagnosis.primaryPainpoints.map(painPointLabel).join(" | ")}
+- Evidence-backed painpoints: ${diagnosis.primaryPainpoints.map(painPointLabel).join(" | ") || "None established"}
 - Diagnosis summary: ${diagnosis.summary}
 - Diagnosis evidence: ${diagnosis.evidence.join(" | ") || "No strong diagnosis evidence extracted"}
 - Diagnosis confidence: ${diagnosis.confidence}`;
@@ -160,6 +163,8 @@ export function diagnosisQuickFixes(
           return `Where: Hero, nav, room/restaurant blocks, and final section | Fix: Use the booking action that matches the visitor intent. | Example: Lodges use "Check Availability"; restaurants use "Reserve a Table"; venues use "Enquire About Availability".`;
         }
         return `Where: Hero, nav, mobile sticky action, and final section | Fix: Use one goal-led primary action everywhere. | Example: Button text = "${cta}" with microcopy that explains what happens next.`;
+      case "unclear_conversion_path":
+        return `Where: Primary action and its destination | Fix: Make the next step explicit and ensure the button reaches a working form, booking, checkout, call, or enquiry handoff. | Example: Keep the observed action label only when its destination clearly completes that same task.`;
       case "flat_visual_hierarchy":
         return `Where: Above the fold | Fix: Make the offer, proof, and primary action visually dominant before secondary content competes. | Example: One headline, one proof strip, one high-contrast "${cta}" button.`;
       case "poor_mobile_scanning":
@@ -230,6 +235,18 @@ function inferSiteGoal(
   scraped: ScrapedWebsiteData,
   primaryCta: string,
 ): RoastSiteGoal {
+  const observedIntent = scraped.businessProfile?.primaryRevenueIntent;
+  if (observedIntent === "purchase") return "sell_online";
+  if (observedIntent === "book_stay") return "drive_direct_bookings";
+  if (observedIntent === "reserve_table") return "drive_reservations";
+  if (observedIntent === "request_quote") return "capture_quote_requests";
+  if (observedIntent === "book_consultation" || observedIntent === "book_appointment") {
+    return "book_consultations";
+  }
+  if (observedIntent === "request_demo" || observedIntent === "start_trial") {
+    return "drive_trials_or_demos";
+  }
+  if (observedIntent === "call") return "generate_calls";
   const text = [siteText(scraped), primaryCta].join(" ");
   if (niche === "ecommerce") return "sell_online";
   if (niche === "hospitality") {
@@ -251,38 +268,33 @@ function inferSiteGoal(
 }
 
 function inferBuyerAnxieties(
-  model: RoastBusinessModel,
-  scraped: ScrapedWebsiteData,
+  painPoints: RoastPainPoint[],
   scoring: WebsiteScoring,
 ): RoastBuyerAnxiety[] {
   const anxieties = new Set<RoastBuyerAnxiety>();
-  const facts = scraped.siteFacts;
 
-  if (categoryRatio("trust", scoring.breakdown.trust) < 0.72 || (facts?.trustSignals.length ?? 0) < 2) {
+  if (painPoints.includes("thin_authority_proof")) {
     anxieties.add("credibility");
     anxieties.add("risk");
   }
-  if (categoryRatio("CTA", scoring.breakdown.CTA) < 0.72) anxieties.add("next_step");
-  if (categoryRatio("clarity", scoring.breakdown.clarity) < 0.72) anxieties.add("qualification");
-
-  if (model === "ecommerce") {
-    anxieties.add("product_fit");
-    anxieties.add("delivery_or_warranty");
-    anxieties.add("price_uncertainty");
-  } else if (model === "professional_service" || model === "healthcare" || model === "b2b_consulting") {
+  if (painPoints.includes("wrong_cta_for_intent")) anxieties.add("next_step");
+  if (painPoints.includes("unclear_conversion_path")) anxieties.add("next_step");
+  if (painPoints.includes("weak_offer_clarity") || painPoints.includes("unclear_buyer_fit")) {
     anxieties.add("qualification");
+  }
+  if (painPoints.includes("missing_price_expectation")) anxieties.add("price_uncertainty");
+  if (painPoints.includes("poor_product_discovery")) {
+    anxieties.add("product_fit");
+  }
+  if (painPoints.includes("weak_checkout_reassurance")) {
+    anxieties.add("delivery_or_warranty");
     anxieties.add("risk");
-    anxieties.add("next_step");
-    if (model === "professional_service") anxieties.add("privacy_or_compliance");
-  } else if (model === "local_service" || model === "construction_trade") {
+  }
+  if (painPoints.includes("no_service_area_confidence")) {
     anxieties.add("location_fit");
+  }
+  if (categoryRatio("CTA", scoring.breakdown.CTA) < 0.45) {
     anxieties.add("response_time");
-    anxieties.add("risk");
-  } else if (model === "hospitality") {
-    anxieties.add("credibility");
-    anxieties.add("price_uncertainty");
-    anxieties.add("next_step");
-    anxieties.add("risk");
   }
 
   return Array.from(anxieties).slice(0, 5);
@@ -290,7 +302,6 @@ function inferBuyerAnxieties(
 
 function inferPainPoints(
   model: RoastBusinessModel,
-  goal: RoastSiteGoal,
   scraped: ScrapedWebsiteData,
   scoring: WebsiteScoring,
 ): RoastPainPoint[] {
@@ -298,11 +309,20 @@ function inferPainPoints(
   const visual = scraped.visualAudit?.summary;
   const facts = scraped.siteFacts;
   const text = siteText(scraped);
-  const strongSite = scoring.score >= 7;
+  const observedTrustCount = Math.max(
+    facts?.trustSignals.length ?? 0,
+    scraped.trustSignals.length,
+  );
 
   if (categoryRatio("clarity", scoring.breakdown.clarity) < 0.72) painPoints.add("weak_offer_clarity");
-  if (categoryRatio("CTA", scoring.breakdown.CTA) < 0.75) painPoints.add("wrong_cta_for_intent");
-  if (categoryRatio("trust", scoring.breakdown.trust) < 0.72 || (facts?.trustSignals.length ?? 0) < 2) {
+  const journeys = scraped.journeys ?? [];
+  const hasClearJourney = journeys.some(
+    (journey) => journey.intent !== "unknown" && journey.status !== "unclear",
+  );
+  if (categoryRatio("CTA", scoring.breakdown.CTA) < 0.75 && !hasClearJourney) {
+    painPoints.add("unclear_conversion_path");
+  }
+  if (categoryRatio("trust", scoring.breakdown.trust) < 0.72 && observedTrustCount < 2) {
     painPoints.add("thin_authority_proof");
   }
   if (categoryRatio("differentiation", scoring.breakdown.differentiation) < 0.72 || scraped.genericPhrasesFound.length >= 2) {
@@ -312,7 +332,6 @@ function inferPainPoints(
   if (visual && visual.readability < 58) painPoints.add("poor_mobile_scanning");
 
   if (model === "ecommerce") {
-    painPoints.add("poor_product_discovery");
     if (!/\b(delivery|shipping|returns?|warranty|guarantee|secure|payment)\b/i.test(text)) {
       painPoints.add("weak_checkout_reassurance");
     }
@@ -321,37 +340,20 @@ function inferPainPoints(
   }
 
   if (model === "professional_service" || model === "healthcare" || model === "b2b_consulting") {
-    painPoints.add("missing_process_explanation");
-    painPoints.add("missing_high_friction_faqs");
     if (!/\b(fee|pricing|cost|quote|consultation|assessment)\b/i.test(text)) painPoints.add("missing_price_expectation");
   }
 
   if (model === "local_service" || model === "construction_trade") {
     if ((facts?.locations.length ?? 0) === 0) painPoints.add("no_service_area_confidence");
-    painPoints.add("missing_process_explanation");
   }
 
   if (model === "hospitality") {
-    painPoints.add("thin_authority_proof");
-    painPoints.add("wrong_cta_for_intent");
     if (!/\b(rate|rates|price|from|availability|book now|reservation|reserve|menu)\b/i.test(text)) {
       painPoints.add("missing_price_expectation");
     }
     if (!/\b(gallery|photos|rooms|amenities|facilities|menu|reviews?|tripadvisor|google reviews)\b/i.test(text)) {
       painPoints.add("underused_trust_assets");
     }
-  }
-
-  if (goal === "build_credibility" && painPoints.size < 3) painPoints.add("no_comparison_argument");
-  if (strongSite) {
-    painPoints.add("strong_site_minor_leaks");
-    painPoints.add("underused_trust_assets");
-  }
-
-  if (painPoints.size < 3) {
-    painPoints.add("weak_offer_clarity");
-    painPoints.add("thin_authority_proof");
-    painPoints.add("wrong_cta_for_intent");
   }
 
   return Array.from(painPoints).slice(0, 5);

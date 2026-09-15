@@ -165,7 +165,7 @@ function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
     case "quote":
       return /\b(get|request)\s+(a\s+)?quote\b|\bestimate\b|\bcall now\b|\bwhatsapp\b/.test(lower);
     case "booking":
-      return /\b(check availability|book direct|reserve a table|make a reservation|view menu)\b|\b(book|schedule)\b.*\b(appointment|visit|call|consultation|room|stay|table)\b|\bbook now\b|\bcall now\b/.test(lower);
+      return /\b(check availability|book direct|reserve a table|make a reservation|view menu|enquire about availability|inquire about availability)\b|\b(book|schedule)\b.*\b(appointment|visit|call|consultation|room|stay|table)\b|\bbook now\b|\bcall now\b/.test(lower);
     case "consultation":
       return /\b(book|schedule)\b.*\b(consultation|call|discovery|conversation)\b|\bfree consultation\b/.test(lower);
     case "download":
@@ -519,6 +519,9 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   const hasH1 = scrapedData.headings.h1.length > 0;
   const meaningfulH1 = hasMeaningfulH1(scrapedData.headings.h1);
   const contentLength = scrapedData.content.length;
+  const homepageContentLength =
+    scrapedData.crawl?.pages.find((page) => page.role === "home")?.contentLength ??
+    contentLength;
   const titleExists = titleText !== "No title found." && titleText.length >= 8;
   const titleLengthGood = titleText.length >= 18 && titleText.length <= 75;
   const descriptionExists =
@@ -716,7 +719,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     );
   }
 
-  if (contentLength > 9000) {
+  if (homepageContentLength > 9000) {
     addAdjustment(
       penalties,
       "Bloated Content",

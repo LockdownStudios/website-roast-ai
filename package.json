@@ -9,8 +9,12 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:benchmark": "tsx -e \"import { runBenchmarkSuite } from './lib/benchmark.ts'; const result = runBenchmarkSuite(); console.log(JSON.stringify(result.summary, null, 2)); if (!result.summary.overallPass) process.exit(1);\"",
+    "test:phase-one": "node --conditions react-server --import tsx scripts/verify-phase-one.ts",
+    "test:crawl": "node --conditions react-server --import tsx scripts/verify-crawl-coverage.ts",
+    "test:profile": "node --conditions react-server --import tsx scripts/verify-business-profile.ts",
+    "test:claims": "node --conditions react-server --import tsx scripts/verify-claim-contract.ts",
     "test:reports": "node --conditions react-server --import tsx scripts/verify-report-fixture.ts",
-    "ci": "npm run typecheck && npm run lint && npm run test:benchmark && npm run test:reports && npm audit --audit-level=high && npm run build"
+    "ci": "npm run typecheck && npm run lint && npm run test:benchmark && npm run test:phase-one && npm run test:crawl && npm run test:profile && npm run test:claims && npm run test:reports && npm audit --audit-level=high && npm run build"
   },
   "dependencies": {
     "next": "16.3.3",

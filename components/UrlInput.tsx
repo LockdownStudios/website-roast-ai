@@ -111,6 +111,8 @@ export function UrlInput({
 
       const payload = (await response.json()) as {
         id?: string;
+        jobId?: string;
+        status?: "queued" | "running" | "succeeded" | "failed";
         cached?: boolean;
         authExpired?: boolean;
         error?: string;
@@ -128,6 +130,12 @@ export function UrlInput({
           confidence?: number;
         };
       };
+
+      if (response.status === 202 && payload.jobId) {
+        const reportId = await waitForRoastJob(payload.jobId, accessToken);
+        router.push(`/result/${reportId}?freshness=fresh`);
+        return;
+      }
 
       if (!response.ok || !payload.id) {
         throw new Error(
@@ -236,4 +244,22 @@ export function UrlInput({
       ) : null}
     </form>
   );
+}
+
+async function waitForRoastJob(jobId: string, accessToken: string | null) {
+  const deadline = Date.now() + 4 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2_500));
+    const response = await fetch(`/api/roast?jobId=${encodeURIComponent(jobId)}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      status?: string;
+      reportId?: string;
+      error?: string;
+    } | null;
+    if (payload?.status === "succeeded" && payload.reportId) return payload.reportId;
+    if (payload?.status === "failed") throw new Error(payload.error || "Roast failed. Please try again.");
+  }
+  throw new Error("Your roast is still running. Please try again in a moment.");
 }

@@ -355,6 +355,7 @@ export function RoastResult({
     scoring.analysisMeta?.sourcePageCount ?? scraped?.crawl?.pageCount ?? 1;
   const crawlStrategy =
     scoring.analysisMeta?.crawlStrategy ?? scraped?.crawl?.strategy ?? "single_page";
+  const coverage = scraped?.crawl?.coverage;
   const engineVersion = scoring.analysisMeta?.engineVersion ?? "unknown";
   const visualAudit = scraped?.visualAudit;
   const visualSummary =
@@ -770,8 +771,11 @@ export function RoastResult({
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.12em] text-muted">
                 Engine {engineVersion} | {sourcePageCount} page
-                {sourcePageCount === 1 ? "" : "s"} analyzed |{" "}
-                {crawlStrategy.replace("_", " ")}
+                {sourcePageCount === 1 ? "" : "s"} reviewed
+                {coverage ? ` of ${coverage.discoveredPageCount} discovered` : ""} |{" "}
+                {coverage?.selectionMode === "representative_sample"
+                  ? "representative sample"
+                  : crawlStrategy.replace("_", " ")}
               </p>
               <p className="mt-2 text-sm text-white/85">{confidence.description}</p>
               {scraped?.usedRelaxedFallback ? (

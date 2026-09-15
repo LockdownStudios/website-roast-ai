@@ -16,8 +16,9 @@ import {
   saveRoastResult,
 } from "@/lib/store";
 import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
-import { analyzeVisualSignals } from "@/lib/visual";
+import { analyzeVisualSignals, withoutVisualImageData } from "@/lib/visual";
 import { sanitizeRoastPayload } from "@/lib/reportSanitizer";
+import { withReportContract } from "@/lib/reportContract";
 import type {
   ScrapedWebsiteData,
   StoredRoastReport,
@@ -93,6 +94,7 @@ function buildScrapeMeta(scraped: ScrapedWebsiteData, scoring: WebsiteScoring) {
     confidence: scoring.confidence,
     sourcePageCount: scraped.crawl?.pageCount ?? 1,
     crawlStrategy: scraped.crawl?.strategy ?? "single_page",
+    coverage: scraped.crawl?.coverage,
   };
 }
 
@@ -124,13 +126,14 @@ function withScoringMeta(
 function toOfficePayload(input: {
   report: StoredRoastReport;
   freshness: "fresh" | "cached";
-  aiUsed: boolean;
-  fallbackUsed: boolean;
   siteUrl: string;
   generationError?: string;
 }) {
   const scoring = withScoringMeta(input.report, input.freshness);
   const access = createUnlockedAccess(getRoastAccess(input.report.roast), "office");
+  const generation = input.report.roast.generation;
+  const aiUsed = generation?.mode === "ai";
+  const fallbackUsed = generation?.mode === "fallback" || generation?.mode === "hybrid";
 
   return {
     id: input.report.id,
@@ -138,9 +141,10 @@ function toOfficePayload(input: {
     reportUrl: new URL(`/result/${input.report.id}`, input.siteUrl).toString(),
     cached: input.freshness === "cached",
     unlocked: true,
-    aiUsed: input.aiUsed,
-    fallbackUsed: input.fallbackUsed,
+    aiUsed,
+    fallbackUsed,
     generationError: input.generationError,
+    generation,
     source: "web-roast",
     scoring,
     roast: withRoastAccess(input.report.roast, access),
@@ -196,7 +200,10 @@ export async function POST(request: NextRequest) {
     }
 
     const scrapedBase = await scrapeWebsite(normalizedUrl);
-    const visualAudit = await analyzeVisualSignals(normalizedUrl);
+    const keyPageUrls = (scrapedBase.crawl?.pages ?? [])
+      .filter((page) => (page.ctaEvidence?.length ?? 0) > 0)
+      .map((page) => page.url);
+    const visualAudit = await analyzeVisualSignals(normalizedUrl, keyPageUrls);
     const scraped = {
       ...scrapedBase,
       visualAudit,
@@ -211,22 +218,26 @@ export async function POST(request: NextRequest) {
         toOfficePayload({
           report: existing,
           freshness: "cached",
-          aiUsed: false,
-          fallbackUsed: false,
           siteUrl,
         }),
       );
     }
 
     const generation = await generateRoastWithUsage(scraped, scoring);
-    const safeRoast = sanitizeRoastPayload(generation.roast, scraped, scoring);
+    const safeRoast = withReportContract(
+      sanitizeRoastPayload(generation.roast, scraped, scoring),
+    );
+    const persistedScraped = {
+      ...scraped,
+      visualAudit: withoutVisualImageData(visualAudit),
+    };
     const report: StoredRoastReport = {
       id: crypto.randomUUID(),
       url: normalizedUrl,
       scrapeHash,
       roast: withRoastAccess(safeRoast, createFreeTeaserAccess()),
       scoring,
-      scraped,
+      scraped: persistedScraped,
       createdAt: new Date().toISOString(),
     };
 
@@ -236,8 +247,6 @@ export async function POST(request: NextRequest) {
       toOfficePayload({
         report,
         freshness: "fresh",
-        aiUsed: generation.aiUsed,
-        fallbackUsed: generation.fallbackUsed,
         siteUrl,
         generationError: generation.error,
       }),

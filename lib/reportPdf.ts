@@ -165,7 +165,7 @@ function drawCover(
   const details = [
     visibleUrl(report.url),
     `Generated ${formatDate(report.createdAt)}`,
-    `${options.isUnlocked ? "Full report unlocked" : `Preview only - unlock for R${options.access.priceZar}`} | Pages reviewed: ${report.scraped.crawl?.pageCount ?? 1}`,
+    `${options.isUnlocked ? "Full report unlocked" : `Preview only - unlock for R${options.access.priceZar}`} | Pages reviewed: ${report.scraped.crawl?.pageCount ?? 1}${report.scraped.crawl?.coverage ? ` of ${report.scraped.crawl.coverage.discoveredPageCount} discovered${report.scraped.crawl.coverage.truncated ? " (sampled)" : ""}` : ""}`,
   ];
   let y = 326;
   details.forEach((detail) => {
@@ -291,7 +291,7 @@ function drawDiagnosis(doc: PDFKit.PDFDocument, report: StoredRoastReport) {
     [
       `Business model: ${businessModelLabel(diagnosis.businessModel)}`,
       `Main site goal: ${siteGoalLabel(diagnosis.siteGoal)}`,
-      `Primary painpoints: ${diagnosis.primaryPainpoints.slice(0, 4).map(painPointLabel).join(" | ")}`,
+      `Primary painpoints: ${diagnosis.primaryPainpoints.slice(0, 4).map(painPointLabel).join(" | ") || "None established by the current scan"}`,
     ],
   );
 }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ScrapedWebsiteData } from "./types";
 
-export const ROAST_ENGINE_VERSION = "v25-hospitality-cta-roasts";
+export const ROAST_ENGINE_VERSION = "v28-business-profile-phase-three";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
@@ -41,21 +41,52 @@ export function createScrapeHash(data: ScrapedWebsiteData): string {
             .slice(0, 8),
         }
       : undefined,
+    businessProfile: data.businessProfile,
+    journeys: data.journeys,
     visualHints: data.visualHints,
+    visualAudit: data.visualAudit?.available
+      ? {
+          summary: data.visualAudit.summary,
+          desktopCta: data.visualAudit.desktop?.primaryCtaText,
+          mobileCta: data.visualAudit.mobile?.primaryCtaText,
+          desktopScreenshot: data.visualAudit.desktop?.screenshotHash,
+          mobileScreenshot: data.visualAudit.mobile?.screenshotHash,
+          keyPageScreenshots: data.visualAudit.keyPages?.map((page) => ({
+            url: normalizeText(page.url),
+            hash: page.desktop.screenshotHash,
+          })),
+        }
+      : { available: false },
     crawl: data.crawl
       ? {
           strategy: data.crawl.strategy,
           pageCount: data.crawl.pageCount,
           visitedUrls: data.crawl.visitedUrls.map(normalizeText).slice(0, 6),
+          coverage: data.crawl.coverage
+            ? {
+                discoveredPageCount: data.crawl.coverage.discoveredPageCount,
+                attemptedPageCount: data.crawl.coverage.attemptedPageCount,
+                reviewedPageCount: data.crawl.coverage.reviewedPageCount,
+                selectionMode: data.crawl.coverage.selectionMode,
+                truncated: data.crawl.coverage.truncated,
+              }
+            : undefined,
           pages: data.crawl.pages
             .map((page) => ({
+              url: normalizeText(page.url),
               role: page.role,
               title: normalizeText(page.title),
               primaryHeading: page.primaryHeading
                 ? normalizeText(page.primaryHeading)
                 : undefined,
+              contentSnippet: page.contentSnippet
+                ? normalizeText(page.contentSnippet)
+                : undefined,
+              ctas: (page.ctas ?? []).map(normalizeText),
+              trustSignals: (page.trustSignals ?? []).map(normalizeText),
+              contactSignals: (page.contactSignals ?? []).map(normalizeText),
             }))
-            .slice(0, 8),
+            .slice(0, 10),
         }
       : undefined,
   };

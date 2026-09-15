@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { clampToRange, roundToOne } from "./scoringConfig";
 import type {
   VisualAudit,
@@ -39,6 +40,11 @@ type PageLike = {
     <Result, Arg>(fn: (arg: Arg) => Result, arg: Arg): Promise<Result>;
     <Result>(script: string): Promise<Result>;
   };
+  screenshot: (options: {
+    type: "jpeg";
+    quality: number;
+    fullPage: boolean;
+  }) => Promise<Buffer>;
 };
 
 type ViewportPreset = {
@@ -591,6 +597,11 @@ async function analyzeViewport(
         ctaPattern: CTA_REGEX_SOURCE,
       },
     );
+    const screenshot = await page.screenshot({
+      type: "jpeg",
+      quality: 58,
+      fullPage: false,
+    });
 
     return {
       viewport: preset.name,
@@ -611,13 +622,39 @@ async function analyzeViewport(
       uniqueFontFamilies: raw.uniqueFontFamilies,
       animatedElementShare: raw.animatedElementShare,
       autoplayMediaCount: raw.autoplayMediaCount,
+      screenshotHash: createHash("sha256").update(screenshot).digest("hex"),
+      screenshotDataUrl: `data:image/jpeg;base64,${screenshot.toString("base64")}`,
     };
   } finally {
     await context.close();
   }
 }
 
-export async function analyzeVisualSignals(url: string): Promise<VisualAudit> {
+export function withoutVisualImageData(audit: VisualAudit): VisualAudit {
+  const strip = (
+    viewport: VisualViewportMetrics | undefined,
+  ): VisualViewportMetrics | undefined => {
+    if (!viewport) return undefined;
+    const persisted = { ...viewport };
+    delete persisted.screenshotDataUrl;
+    return persisted;
+  };
+
+  return {
+    ...audit,
+    desktop: strip(audit.desktop),
+    mobile: strip(audit.mobile),
+    keyPages: audit.keyPages?.map((page) => ({
+      ...page,
+      desktop: strip(page.desktop)!,
+    })),
+  };
+}
+
+export async function analyzeVisualSignals(
+  url: string,
+  keyPageUrls: string[] = [],
+): Promise<VisualAudit> {
   if (process.env.DISABLE_VISUAL_ANALYSIS === "1") {
     return unavailableAudit("disabled by DISABLE_VISUAL_ANALYSIS=1");
   }
@@ -640,12 +677,27 @@ export async function analyzeVisualSignals(url: string): Promise<VisualAudit> {
       args: ["--disable-dev-shm-usage"],
     });
 
-    const [desktop, mobile] = await withTimeout(
+    const selectedKeyPages = [...new Set(keyPageUrls)]
+      .filter((pageUrl) => pageUrl !== normalized && /^https?:\/\//i.test(pageUrl))
+      .slice(0, 2);
+    const [desktop, mobile, keyPages] = await withTimeout(
       Promise.all([
         analyzeViewport(browser, normalized, VIEWPORTS[0]),
         analyzeViewport(browser, normalized, VIEWPORTS[1]),
+        Promise.all(
+          selectedKeyPages.map(async (pageUrl) => {
+            try {
+              return {
+                url: pageUrl,
+                desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0]),
+              };
+            } catch {
+              return null;
+            }
+          }),
+        ),
       ]),
-      20000,
+      28000,
       "Visual analysis",
     );
     const summary = buildVisualSummary(desktop, mobile);
@@ -657,6 +709,7 @@ export async function analyzeVisualSignals(url: string): Promise<VisualAudit> {
       sampledAt: nowIso(),
       desktop,
       mobile,
+      keyPages: keyPages.filter((page): page is NonNullable<typeof page> => Boolean(page)),
       summary,
       findings,
       evidence,

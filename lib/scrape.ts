@@ -1,11 +1,15 @@
 import type {
+  CrawlDiscoverySource,
+  CrawlFailure,
   CrawlPageRole,
   CrawlPageSummary,
   CrawlStrategy,
+  ObservedCta,
   ScrapeQuality,
   ScrapedWebsiteData,
   VisualHints,
 } from "./types";
+import { buildBusinessProfile, buildCustomerJourneys } from "./businessProfile";
 import { buildSiteFacts } from "./siteFacts";
 
 const MAX_CONTENT_CHARS = 12000;
@@ -15,6 +19,12 @@ const MAX_LINES = 320;
 const MAX_FETCH_ATTEMPTS = 2;
 const MAX_TOTAL_PAGES = 10;
 const MAX_ADDITIONAL_PAGES = MAX_TOTAL_PAGES - 1;
+const MAX_DISCOVERED_PAGES = 240;
+const INITIAL_ADDITIONAL_PAGE_COUNT = 6;
+const PAGE_FETCH_CONCURRENCY = 3;
+const FETCH_TIMEOUT_MS = 9000;
+const DISCOVERY_FETCH_TIMEOUT_MS = 6500;
+const MAX_PAGE_EVIDENCE_CHARS = 1200;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 const CTA_PHRASES = [
@@ -197,12 +207,14 @@ type PageExtractResult = {
   retryUsed: boolean;
   html: string;
   renderedFallbackUsed: boolean;
+  discoveredFrom: CrawlDiscoverySource;
 };
 
 type CandidatePage = {
   url: string;
   role: CrawlPageRole;
   score: number;
+  discoveredFrom: Exclude<CrawlDiscoverySource, "entry">;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -379,6 +391,7 @@ function linkPriorityScore(url: string): number {
 function rankInternalCandidatePages(
   baseUrl: string,
   anchors: AnchorSignal[],
+  discoveredFrom: "navigation" | "linked_page" = "navigation",
 ): CandidatePage[] {
   let base: URL;
   try {
@@ -413,7 +426,13 @@ function rankInternalCandidatePages(
     }
 
     const role = classifyPageRole(parsed.toString());
-    const priority = linkPriorityScore(parsed.toString());
+    const anchorText = anchor.text.toLowerCase();
+    const intentBoost = /\b(service|solution|product|shop|room|stay|menu|booking|book|pricing|rates?|project|case stud|review|testimonial|contact|about|faq|process)\b/.test(
+      anchorText,
+    )
+      ? 3
+      : 0;
+    const priority = linkPriorityScore(parsed.toString()) + intentBoost;
     if (priority <= 0) {
       continue;
     }
@@ -424,20 +443,19 @@ function rankInternalCandidatePages(
         url: parsed.toString(),
         role,
         score: priority,
+        discoveredFrom,
       });
     }
   }
 
   return [...bestByUrl.values()]
     .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_ADDITIONAL_PAGES);
+    .slice(0, MAX_DISCOVERED_PAGES);
 }
 
 function sitemapUrlFor(baseUrl: string, pathname: string): string | null {
   try {
-    const parsed = new URL(baseUrl);
-    parsed.pathname = pathname;
-    parsed.search = "";
+    const parsed = new URL(pathname, baseUrl);
     parsed.hash = "";
     return parsed.toString();
   } catch {
@@ -452,6 +470,7 @@ async function fetchTextQuietly(url: string): Promise<string | null> {
         "User-Agent": "WebsiteRoastAI/1.0 (+https://local.dev)",
         Accept: "application/xml,text/xml,text/plain,*/*;q=0.8",
       },
+      signal: AbortSignal.timeout(DISCOVERY_FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -499,7 +518,10 @@ async function discoverSitemapCandidatePages(baseUrl: string): Promise<Candidate
       robots?.match(/^sitemap:\s*(.+)$/gim)?.map((line) => line.replace(/^sitemap:\s*/i, "").trim()) ??
       [];
     for (const sitemap of robotSitemaps) {
-      sitemapUrls.add(sitemap);
+      const absoluteSitemap = sitemapUrlFor(baseUrl, sitemap);
+      if (absoluteSitemap) {
+        sitemapUrls.add(absoluteSitemap);
+      }
     }
   }
 
@@ -526,11 +548,12 @@ async function discoverSitemapCandidatePages(baseUrl: string): Promise<Candidate
     }
 
     for (const nested of nestedSitemaps.slice(0, 4)) {
-      if (visitedSitemaps.has(nested)) {
+      const absoluteNested = sitemapUrlFor(sitemap, nested);
+      if (!absoluteNested || visitedSitemaps.has(absoluteNested)) {
         continue;
       }
-      visitedSitemaps.add(nested);
-      const nestedXml = await fetchTextQuietly(nested);
+      visitedSitemaps.add(absoluteNested);
+      const nestedXml = await fetchTextQuietly(absoluteNested);
       if (!nestedXml) {
         continue;
       }
@@ -542,7 +565,7 @@ async function discoverSitemapCandidatePages(baseUrl: string): Promise<Candidate
 
   const homeKey = urlKey(base.toString());
   return [...discoveredPageUrls]
-    .map((pageUrl) => {
+    .map((pageUrl): CandidatePage | null => {
       try {
         const parsed = new URL(pageUrl, baseUrl);
         parsed.hash = "";
@@ -551,7 +574,7 @@ async function discoverSitemapCandidatePages(baseUrl: string): Promise<Candidate
         }
         const role = classifyPageRole(parsed.toString());
         const score = linkPriorityScore(parsed.toString()) + (role === "other" ? 0 : 3);
-        return { url: parsed.toString(), role, score };
+        return { url: parsed.toString(), role, score, discoveredFrom: "sitemap" };
       } catch {
         return null;
       }
@@ -559,7 +582,7 @@ async function discoverSitemapCandidatePages(baseUrl: string): Promise<Candidate
     .filter((candidate): candidate is CandidatePage => Boolean(candidate))
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_ADDITIONAL_PAGES);
+    .slice(0, MAX_DISCOVERED_PAGES);
 }
 
 function mergeCandidatePages(...groups: CandidatePage[][]): CandidatePage[] {
@@ -575,7 +598,73 @@ function mergeCandidatePages(...groups: CandidatePage[][]): CandidatePage[] {
 
   return [...bestByUrl.values()]
     .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_ADDITIONAL_PAGES);
+    .slice(0, MAX_DISCOVERED_PAGES);
+}
+
+function selectRepresentativeCandidates(
+  candidates: CandidatePage[],
+  limit: number,
+  excludedKeys: Set<string> = new Set(),
+): CandidatePage[] {
+  if (limit <= 0) return [];
+
+  const available = candidates.filter((candidate) => !excludedKeys.has(urlKey(candidate.url)));
+  const selected: CandidatePage[] = [];
+  const selectedKeys = new Set<string>();
+  const preferredRoles: CrawlPageRole[] = [
+    "services",
+    "pricing",
+    "contact",
+    "about",
+    "projects",
+    "testimonials",
+    "faq",
+    "other",
+  ];
+
+  for (const role of preferredRoles) {
+    const match = available.find((candidate) => candidate.role === role);
+    if (!match) continue;
+    selected.push(match);
+    selectedKeys.add(urlKey(match.url));
+    if (selected.length >= limit) return selected;
+  }
+
+  for (const candidate of available) {
+    const key = urlKey(candidate.url);
+    if (selectedKeys.has(key)) continue;
+    selected.push(candidate);
+    selectedKeys.add(key);
+    if (selected.length >= limit) break;
+  }
+
+  return selected;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<Array<PromiseSettledResult<R>>> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, () => runWorker()),
+  );
+  return results;
 }
 
 function extractMetaDescription(html: string): string {
@@ -788,6 +877,44 @@ function detectCtaSignals(corpusText: string, anchors: AnchorSignal[]): string[]
   }
 
   return rankCtaSignals(hits).slice(0, 24);
+}
+
+function observedCtaEvidence(page: PageExtractResult): ObservedCta[] {
+  const seen = new Set<string>();
+  const sourceOrigin = new URL(page.pageUrl).origin;
+  const evidence: ObservedCta[] = [];
+
+  for (const anchor of page.anchors) {
+    const label = normalizeWhitespace(anchor.text);
+    if (!label || !isLikelyCtaAnchorText(label)) continue;
+
+    const rawDestination = normalizeWhitespace(anchor.href);
+    let destination = rawDestination;
+    let destinationType: ObservedCta["destinationType"] = "unknown";
+    const lower = rawDestination.toLowerCase();
+
+    if (lower.startsWith("tel:")) destinationType = "phone";
+    else if (lower.startsWith("mailto:")) destinationType = "email";
+    else if (/^(?:https?:\/\/)?(?:wa\.me|api\.whatsapp\.com)|whatsapp:/i.test(rawDestination)) {
+      destinationType = "whatsapp";
+    } else if (!rawDestination || rawDestination.startsWith("#") || lower.startsWith("javascript:")) {
+      destinationType = "page_action";
+    } else {
+      const absolute = toAbsoluteUrl(page.pageUrl, rawDestination);
+      if (absolute) {
+        destination = absolute;
+        destinationType = new URL(absolute).origin === sourceOrigin ? "same_origin" : "external";
+      }
+    }
+
+    const key = `${label.toLowerCase()}|${destination.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    evidence.push({ label, destination: destination || undefined, destinationType, sourceUrl: page.pageUrl });
+    if (evidence.length >= 12) break;
+  }
+
+  return evidence;
 }
 
 function normalizePhoneCandidate(phone: string): string | null {
@@ -1130,6 +1257,7 @@ async function fetchWithRetry(url: string): Promise<FetchWithRetryResult> {
           Accept:
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
 
       if (response.ok) {
@@ -1162,6 +1290,7 @@ function buildPageExtractResult(
   html: string,
   retryUsed: boolean,
   renderedFallbackUsed: boolean,
+  discoveredFrom: CrawlDiscoverySource,
 ): PageExtractResult {
   const [title = "No title found."] = extractTagContent(html, "title");
   const h1 = extractTagContent(html, "h1").slice(0, 12);
@@ -1184,16 +1313,25 @@ function buildPageExtractResult(
     retryUsed,
     html,
     renderedFallbackUsed,
+    discoveredFrom,
   };
 }
 
 async function extractPage(
   pageUrl: string,
   role: CrawlPageRole,
+  discoveredFrom: CrawlDiscoverySource = "entry",
 ): Promise<PageExtractResult> {
   const { response, retryUsed } = await fetchWithRetry(pageUrl);
   const html = await response.text();
-  const staticPage = buildPageExtractResult(pageUrl, role, html, retryUsed, false);
+  const staticPage = buildPageExtractResult(
+    pageUrl,
+    role,
+    html,
+    retryUsed,
+    false,
+    discoveredFrom,
+  );
 
   if (!shouldUseRenderedFallback(staticPage)) {
     return staticPage;
@@ -1210,6 +1348,7 @@ async function extractPage(
     renderedHtml,
     retryUsed,
     true,
+    discoveredFrom,
   );
 
   if (
@@ -1224,25 +1363,111 @@ async function extractPage(
   return staticPage;
 }
 
+function pageSignalCorpus(page: PageExtractResult): string {
+  return [
+    page.title,
+    page.description,
+    page.h1.join(" "),
+    page.h2.join(" "),
+    page.content,
+    page.anchors.map((anchor) => anchor.text).join(" "),
+  ].join(" ");
+}
+
+function toCrawlPageSummary(page: PageExtractResult): CrawlPageSummary {
+  const corpus = pageSignalCorpus(page);
+  return {
+    url: page.pageUrl,
+    role: page.role,
+    title: page.title,
+    description: page.description,
+    primaryHeading: page.h1[0] || page.h2[0],
+    headings: [...page.h1.slice(0, 4), ...page.h2.slice(0, 8)],
+    contentSnippet: page.content.slice(0, MAX_PAGE_EVIDENCE_CHARS),
+    ctas: detectCtaSignals(corpus, page.anchors).slice(0, 8),
+    ctaEvidence: observedCtaEvidence(page),
+    trustSignals: detectTrustSignals(corpus).slice(0, 8),
+    contactSignals: extractContactSignals(page.html, page.content, page.anchors).slice(0, 6),
+    extractionMode: page.renderedFallbackUsed ? "rendered" : "static",
+    discoveredFrom: page.discoveredFrom,
+    contentLength: page.content.length,
+    headingCount: page.h1.length + page.h2.length,
+  };
+}
+
 export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
-  const homepage = await extractPage(url, classifyPageRole(url));
-  const candidates = mergeCandidatePages(
-    rankInternalCandidatePages(url, homepage.anchors),
-    await discoverSitemapCandidatePages(url),
+  const startedAt = Date.now();
+  const [homepage, sitemapCandidates] = await Promise.all([
+    extractPage(url, classifyPageRole(url), "entry"),
+    discoverSitemapCandidatePages(url),
+  ]);
+  const initialCandidates = mergeCandidatePages(
+    rankInternalCandidatePages(url, homepage.anchors, "navigation"),
+    sitemapCandidates,
   );
   const additionalPages: PageExtractResult[] = [];
-  const failedUrls: string[] = [];
+  const failures: CrawlFailure[] = [];
+  const attemptedKeys = new Set<string>();
 
-  for (const candidate of candidates) {
-    try {
-      const page = await extractPage(candidate.url, candidate.role);
-      additionalPages.push(page);
-    } catch {
-      failedUrls.push(candidate.url);
-    }
-  }
+  const fetchCandidates = async (selected: CandidatePage[]) => {
+    for (const candidate of selected) attemptedKeys.add(urlKey(candidate.url));
+    const results = await mapWithConcurrency(
+      selected,
+      PAGE_FETCH_CONCURRENCY,
+      (candidate) => extractPage(candidate.url, candidate.role, candidate.discoveredFrom),
+    );
+
+    results.forEach((result, index) => {
+      const candidate = selected[index];
+      if (result.status === "fulfilled") {
+        additionalPages.push(result.value);
+      } else {
+        failures.push({
+          url: candidate.url,
+          reason: getErrorReason(result.reason).slice(0, 240),
+        });
+      }
+    });
+  };
+
+  const firstSelection = selectRepresentativeCandidates(
+    initialCandidates,
+    Math.min(INITIAL_ADDITIONAL_PAGE_COUNT, MAX_ADDITIONAL_PAGES),
+  );
+  await fetchCandidates(firstSelection);
+
+  const linkedCandidates = additionalPages.flatMap((page) =>
+    rankInternalCandidatePages(page.pageUrl, page.anchors, "linked_page"),
+  );
+  const expandedCandidates = mergeCandidatePages(initialCandidates, linkedCandidates);
+  const secondSelection = selectRepresentativeCandidates(
+    expandedCandidates,
+    MAX_ADDITIONAL_PAGES - firstSelection.length,
+    attemptedKeys,
+  );
+  await fetchCandidates(secondSelection);
+
+  const finalLinkedCandidates = additionalPages.flatMap((page) =>
+    rankInternalCandidatePages(page.pageUrl, page.anchors, "linked_page"),
+  );
+  const discoveredCandidates = mergeCandidatePages(
+    initialCandidates,
+    linkedCandidates,
+    finalLinkedCandidates,
+  );
+  const selectedCandidates = [...firstSelection, ...secondSelection];
+  const selectedKeys = new Set(selectedCandidates.map((candidate) => urlKey(candidate.url)));
+  const skippedUrls = discoveredCandidates
+    .filter((candidate) => !selectedKeys.has(urlKey(candidate.url)))
+    .map((candidate) => candidate.url)
+    .slice(0, 30);
 
   const pages = [homepage, ...additionalPages].slice(0, MAX_TOTAL_PAGES);
+  const pageSummaries = pages.map(toCrawlPageSummary);
+
+  if (pages.length === 0) {
+    throw new Error("Could not fetch website content (no pages reviewed).");
+  }
 
   const titles = pages.map((page) => page.title);
   const descriptions = pages.map((page) => page.description);
@@ -1257,7 +1482,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
       } catch {
         label = page.role.toUpperCase();
       }
-      return `[${label}] ${page.content}`;
+      return `[${label}] ${page.content.slice(0, MAX_PAGE_EVIDENCE_CHARS)}`;
     })
     .join(" ");
   const content = normalizeWhitespace(combinedContentRaw).slice(0, MAX_CONTENT_CHARS);
@@ -1298,17 +1523,10 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
   const visualHints = detectVisualHints(homepage.html, homepage.h1[0], homepage.anchors);
   const retryUsed = pages.some((page) => page.retryUsed);
   const usedRelaxedFallback = pages.some((page) => page.visible.usedRelaxedFallback);
-
   const crawlStrategy: CrawlStrategy = pages.length > 1 ? "multi_page" : "single_page";
-  const pageSummaries: CrawlPageSummary[] = pages.map((page) => ({
-    url: page.pageUrl,
-    role: page.role,
-    title: page.title,
-    primaryHeading: page.h1[0] || page.h2[0],
-    contentSnippet: page.content.slice(0, 650),
-    contentLength: page.content.length,
-    headingCount: page.h1.length + page.h2.length,
-  }));
+  const discoveredPageCount = 1 + discoveredCandidates.length;
+  const attemptedPageCount = 1 + selectedCandidates.length;
+  const truncated = discoveredPageCount > attemptedPageCount;
 
   const scrapeQuality = computeScrapeQuality({
     title,
@@ -1322,7 +1540,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
       genericPhrasesFound.length,
     usedRelaxedFallback,
     pageCount: pages.length,
-    failedPageCount: failedUrls.length,
+    failedPageCount: failures.length,
   });
 
   const scraped: ScrapedWebsiteData = {
@@ -1341,7 +1559,18 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
       strategy: crawlStrategy,
       pageCount: pages.length,
       visitedUrls: pages.map((page) => page.pageUrl),
-      failedUrls,
+      failedUrls: failures.map((failure) => failure.url),
+      failures,
+      coverage: {
+        discoveredPageCount,
+        attemptedPageCount,
+        reviewedPageCount: pages.length,
+        maxPages: MAX_TOTAL_PAGES,
+        selectionMode: truncated ? "representative_sample" : "all_discovered",
+        truncated,
+        skippedUrls,
+        durationMs: Date.now() - startedAt,
+      },
       pages: pageSummaries,
     },
     contentLength,
@@ -1350,8 +1579,14 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     scrapeQuality,
   };
 
-  return {
+  const withFacts: ScrapedWebsiteData = {
     ...scraped,
     siteFacts: buildSiteFacts(scraped),
+  };
+  const journeys = buildCustomerJourneys(withFacts);
+  return {
+    ...withFacts,
+    journeys,
+    businessProfile: buildBusinessProfile(withFacts, journeys),
   };
 }

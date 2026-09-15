@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRoast } from "@/lib/ai";
+import { generateRoastWithUsage } from "@/lib/ai";
 import { extractBearerToken, getSupabaseUserFromAccessToken } from "@/lib/auth";
 import { buildTeaserRoast, createFreeTeaserAccess, getRoastAccess, isRoastUnlocked, withRoastAccess } from "@/lib/reportAccess";
 import { scrapeWebsite } from "@/lib/scrape";
 import { scoreWebsite } from "@/lib/scoring";
-import { analyzeVisualSignals } from "@/lib/visual";
+import { analyzeVisualSignals, withoutVisualImageData } from "@/lib/visual";
 import {
   findRoastByUrlAndHash,
   getRoastResult,
@@ -20,6 +20,8 @@ import {
   sanitizeWebsiteScoring,
 } from "@/lib/reportSanitizer";
 import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
+import { withReportContract } from "@/lib/reportContract";
+import { areRoastJobsEnabled, enqueueRoastScan, getRoastScanJob } from "@/lib/roastJobs";
 import type { ScrapedWebsiteData, StoredRoastReport, WebsiteScoring } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,7 @@ function buildScrapeMeta(scraped: ScrapedWebsiteData, scoring: WebsiteScoring) {
     confidence: scoring.confidence,
     sourcePageCount: scraped.crawl?.pageCount ?? 1,
     crawlStrategy: scraped.crawl?.strategy ?? "single_page",
+    coverage: scraped.crawl?.coverage,
   };
 }
 
@@ -124,6 +127,7 @@ function toClientReportPayload(
     unlocked,
     authExpired: options.authExpired ? true : undefined,
     scrapeMeta: buildScrapeMeta(report.scraped, safeScoring),
+    generation: report.roast.generation,
   };
 }
 
@@ -141,12 +145,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as { url?: string; workerUserId?: string };
     const normalizedUrl = normalizeUrl(body.url ?? "");
     const token = extractBearerToken(request.headers.get("authorization"));
     const user = token ? await getSupabaseUserFromAccessToken(token) : null;
     const authExpired = Boolean(token && !user);
-    const userId = user?.id;
+    const workerRequest = request.headers.get("x-roast-worker-secret") === process.env.ROAST_JOB_WORKER_SECRET;
+    const userId = user?.id ?? (workerRequest ? body.workerUserId : undefined);
 
     if (!normalizedUrl) {
       return NextResponse.json(
@@ -155,8 +160,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (areRoastJobsEnabled() && !workerRequest) {
+      const job = await enqueueRoastScan(normalizedUrl, userId);
+      return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
+    }
+
     const scrapedBase = await scrapeWebsite(normalizedUrl);
-    const visualAudit = await analyzeVisualSignals(normalizedUrl);
+    const keyPageUrls = (scrapedBase.crawl?.pages ?? [])
+      .filter((page) => (page.ctaEvidence?.length ?? 0) > 0)
+      .map((page) => page.url);
+    const visualAudit = await analyzeVisualSignals(normalizedUrl, keyPageUrls);
     const scraped = {
       ...scrapedBase,
       visualAudit,
@@ -206,10 +219,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const generation = await generateRoastWithUsage(scraped, scoring);
+    if (generation.fallbackUsed) {
+      console.error("[api/roast] evidence-backed generation incomplete", {
+        url: normalizedUrl,
+        generation: generation.roast.generation,
+        error: generation.error,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "We could not complete an evidence-backed roast for this site. Nothing has been charged. Please try again.",
+          code: "roast-generation-incomplete",
+        },
+        { status: 502 },
+      );
+    }
     const roast = withRoastAccess(
-      sanitizeRoastPayload(await generateRoast(scraped, scoring), scraped, scoring),
+      withReportContract(sanitizeRoastPayload(generation.roast, scraped, scoring)),
       createFreeTeaserAccess(),
     );
+    const persistedScraped = {
+      ...scraped,
+      visualAudit: withoutVisualImageData(visualAudit),
+    };
     const id = crypto.randomUUID();
 
     const report = {
@@ -219,7 +252,7 @@ export async function POST(request: NextRequest) {
       scrapeHash: userScopedScrapeHash ?? scrapeHash,
       roast,
       scoring,
-      scraped,
+      scraped: persistedScraped,
       createdAt: new Date().toISOString(),
     };
     await saveRoastResult(report);
@@ -243,6 +276,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const jobId = request.nextUrl.searchParams.get("jobId");
+  if (jobId) {
+    if (!areRoastJobsEnabled()) {
+      return NextResponse.json({ error: "Background scans are not enabled." }, { status: 404 });
+    }
+    const job = await getRoastScanJob(jobId);
+    if (!job) return NextResponse.json({ error: "Scan job not found." }, { status: 404 });
+    return NextResponse.json({ jobId: job.id, status: job.status, reportId: job.reportId, error: job.errorMessage });
+  }
+
   const id = request.nextUrl.searchParams.get("id");
 
   if (!id) {

@@ -8,6 +8,8 @@ export type VisualHints = {
 };
 
 export type CrawlStrategy = "single_page" | "multi_page";
+export type CrawlDiscoverySource = "entry" | "navigation" | "sitemap" | "linked_page";
+export type CrawlSelectionMode = "all_discovered" | "representative_sample";
 
 export type CrawlPageRole =
   | "home"
@@ -20,14 +22,54 @@ export type CrawlPageRole =
   | "faq"
   | "other";
 
+export type CtaDestinationType =
+  | "same_origin"
+  | "external"
+  | "phone"
+  | "email"
+  | "whatsapp"
+  | "page_action"
+  | "unknown";
+
+export type ObservedCta = {
+  label: string;
+  destination?: string;
+  destinationType: CtaDestinationType;
+  sourceUrl: string;
+};
+
 export type CrawlPageSummary = {
   url: string;
   role: CrawlPageRole;
   title: string;
+  description?: string;
   primaryHeading?: string;
+  headings?: string[];
   contentSnippet?: string;
+  ctas?: string[];
+  ctaEvidence?: ObservedCta[];
+  trustSignals?: string[];
+  contactSignals?: string[];
+  extractionMode?: "static" | "rendered";
+  discoveredFrom?: CrawlDiscoverySource;
   contentLength: number;
   headingCount: number;
+};
+
+export type CrawlFailure = {
+  url: string;
+  reason: string;
+};
+
+export type CrawlCoverage = {
+  discoveredPageCount: number;
+  attemptedPageCount: number;
+  reviewedPageCount: number;
+  maxPages: number;
+  selectionMode: CrawlSelectionMode;
+  truncated: boolean;
+  skippedUrls: string[];
+  durationMs: number;
 };
 
 export type CrawlSummary = {
@@ -35,6 +77,8 @@ export type CrawlSummary = {
   pageCount: number;
   visitedUrls: string[];
   failedUrls: string[];
+  failures?: CrawlFailure[];
+  coverage?: CrawlCoverage;
   pages: CrawlPageSummary[];
 };
 
@@ -59,6 +103,8 @@ export type VisualViewportMetrics = {
   uniqueFontFamilies: number;
   animatedElementShare: number;
   autoplayMediaCount: number;
+  screenshotHash?: string;
+  screenshotDataUrl?: string;
 };
 
 export type VisualSummaryScores = {
@@ -75,6 +121,10 @@ export type VisualAudit = {
   sampledAt: string;
   desktop?: VisualViewportMetrics;
   mobile?: VisualViewportMetrics;
+  keyPages?: Array<{
+    url: string;
+    desktop: VisualViewportMetrics;
+  }>;
   summary?: VisualSummaryScores;
   findings: string[];
   evidence: string[];
@@ -101,6 +151,50 @@ export type SiteFacts = {
   copyIssues: SiteFactEvidence[];
 };
 
+export type BusinessOffering = {
+  name: string;
+  kind: "service" | "product" | "experience" | "unknown";
+  sourceUrl?: string;
+};
+
+export type CustomerJourneyIntent =
+  | "purchase"
+  | "book_stay"
+  | "reserve_table"
+  | "request_quote"
+  | "book_consultation"
+  | "book_appointment"
+  | "request_demo"
+  | "start_trial"
+  | "apply"
+  | "call"
+  | "contact"
+  | "view_menu"
+  | "learn"
+  | "unknown";
+
+export type CustomerJourney = {
+  intent: CustomerJourneyIntent;
+  label: string;
+  sourceUrl: string;
+  destination?: string;
+  destinationType: CtaDestinationType;
+  status: "observed_handoff" | "onsite_step" | "page_action" | "unclear";
+};
+
+export type BusinessProfile = {
+  companyName?: string;
+  summary: string;
+  offerings: BusinessOffering[];
+  audiences: SiteFactEvidence[];
+  serviceAreas: SiteFactEvidence[];
+  revenueIntents: CustomerJourneyIntent[];
+  primaryRevenueIntent: CustomerJourneyIntent | "unknown";
+  mixedBusiness: boolean;
+  confidence: "high" | "medium" | "low";
+  unknowns: string[];
+};
+
 export type ScrapedWebsiteData = {
   url: string;
   title: string;
@@ -119,6 +213,8 @@ export type ScrapedWebsiteData = {
   visualAudit?: VisualAudit;
   crawl?: CrawlSummary;
   siteFacts?: SiteFacts;
+  businessProfile?: BusinessProfile;
+  journeys?: CustomerJourney[];
   contentLength: number;
   retryUsed: boolean;
   usedRelaxedFallback: boolean;
@@ -224,11 +320,31 @@ export type RoastClaimSource =
 
 export type RoastClaimSeverity = "high" | "medium" | "low";
 
+export type RoastClaimTarget =
+  | "first_impression"
+  | "single_biggest_leak"
+  | "mistake"
+  | "lost_customers"
+  | "high_impact"
+  | "score";
+
+export type RoastClaimCertainty = "observed" | "inference";
+
 export type RoastClaim = {
   claim: string;
   source: RoastClaimSource;
   evidence: string;
   severity: RoastClaimSeverity;
+  target?: RoastClaimTarget;
+  sourceUrl?: string;
+  certainty?: RoastClaimCertainty;
+};
+
+export type RoastGenerationMetadata = {
+  mode: "ai" | "hybrid" | "fallback";
+  model?: string;
+  reason?: "model_unavailable" | "model_error" | "validation_failed";
+  validationIssues?: string[];
 };
 
 export type RoastBusinessModel =
@@ -272,6 +388,7 @@ export type RoastBuyerAnxiety =
 
 export type RoastPainPoint =
   | "weak_offer_clarity"
+  | "unclear_conversion_path"
   | "wrong_cta_for_intent"
   | "thin_authority_proof"
   | "missing_price_expectation"
@@ -302,6 +419,7 @@ export type RoastDiagnosis = {
 };
 
 export type RoastResultPayload = {
+  contractVersion?: string;
   score: number;
   score_label: ScoreLabel;
   diagnosis?: RoastDiagnosis;
@@ -314,6 +432,7 @@ export type RoastResultPayload = {
   tone_summary: string;
   evidence: string[];
   claim_contract?: RoastClaim[];
+  generation?: RoastGenerationMetadata;
   access?: ReportAccess;
 };
 
