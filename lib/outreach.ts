@@ -9,7 +9,10 @@ import type { OutreachAudit, RoastResultPayload, ScrapedWebsiteData, WebsiteScor
 
 export async function generateOutreachAudit(scraped: ScrapedWebsiteData, scoring: WebsiteScoring, actor: AiActor) {
   const views = [scraped.visualAudit?.desktop, scraped.visualAudit?.mobile];
-  if (views.some(view => !view?.captureReadiness?.settled || !view.screenshotDataUrl)) throw new AiUsageError("outreach-visual-unavailable", "Desktop and mobile screenshots did not settle. No visual outreach report was generated or paid AI request authorised.", 422);
+  if (views.some(view => !view?.captureReadiness?.settled || !view.screenshotDataUrl)) {
+    const reasons = views.flatMap((view, index) => view?.captureReadiness?.settled && view.screenshotDataUrl ? [] : [`${index ? "Mobile" : "Desktop"}: ${view?.captureReadiness?.reasons.join("; ") || scraped.visualAudit?.reason || "capture unavailable"}`]);
+    throw new AiUsageError("outreach-visual-unavailable", `Visual capture could not be completed. ${reasons.join(". ")}. No paid AI request was authorised.`, 422);
+  }
   const images = views.map((view, index) => ({ label: index ? "Mobile homepage" : "Desktop homepage", sourceUrl: scraped.url, dataUrl: view!.screenshotDataUrl! }));
   const records = claimEvidenceRecords(scraped, scoring).filter(record => record.source !== "scoring");
   const packed = compactEvidence(records);

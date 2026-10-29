@@ -648,9 +648,9 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
-    // Keep contexts alive until all viewport screenshots finish. Disposing one
-    // context while another is rasterising can stall serverless Chromium.
-    // analyzeVisualSignals always closes their owning browser in its finally.
+    // Viewports now run sequentially, so closing this context cannot interrupt
+    // another viewport's rasterisation and releases its scripts/media promptly.
+    await context.close();
     note("viewport-finished");
   }
 }
@@ -714,26 +714,29 @@ export async function analyzeVisualSignals(
       .filter((pageUrl) => pageUrl !== normalized && /^https?:\/\//i.test(pageUrl))
       .slice(0, 2);
     const [desktop, mobile, keyPages] = await withTimeout(
-      Promise.all([
-        analyzeViewport(browser, normalized, VIEWPORTS[0], captureScreenshot),
-        analyzeViewport(browser, normalized, VIEWPORTS[1], captureScreenshot),
-        Promise.all(
-          selectedKeyPages.map(async (pageUrl) => {
+      (async () => {
+        // Serialize the whole viewport lifecycle. A second page navigating or
+        // animating can steal the serverless compositor even with a screenshot queue.
+        const desktop = await analyzeViewport(browser!, normalized, VIEWPORTS[0], captureScreenshot);
+        const mobile = await analyzeViewport(browser!, normalized, VIEWPORTS[1], captureScreenshot);
+        const keyPages = [];
+        for (const pageUrl of selectedKeyPages) {
             try {
-              return {
+              keyPages.push({
                 url: pageUrl,
                 desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0], captureScreenshot),
-              };
+              });
             } catch {
-              return null;
+              // Optional key pages must not invalidate the required home views.
             }
-          }),
-        ),
-      ]),
-      process.env.VERCEL === "1" ? 60_000 : 28_000,
+        }
+        return [desktop, mobile, keyPages] as const;
+      })(),
+      process.env.VERCEL === "1" ? 90_000 : 60_000,
       "Visual analysis",
     );
     if (!desktop.captureReadiness?.settled || !mobile.captureReadiness?.settled) {
+      console.warn("[visual] readiness failed", { url: normalized, desktop: desktop.captureReadiness, mobile: mobile.captureReadiness });
       return {
         ...unavailableAudit("The submitted page did not settle reliably; visual scoring was withheld."),
         desktop, mobile,
