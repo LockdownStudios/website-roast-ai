@@ -4,7 +4,7 @@ import { compactEvidence, promptEvidenceCatalog } from "./compactEvidence";
 import { AiUsageError, reserveAiRun, type AiActor } from "./aiUsage";
 import { requestAiCompletion } from "./aiCompletion";
 import { parseOutreach, outreachResponseFormat, resolveOutreachCitations } from "./outreachContract";
-import { reviewReport } from "./reportReview";
+import { editAndReviewOutreach } from "./outreachEditor";
 import type { OutreachAudit, RoastResultPayload, ScrapedWebsiteData, WebsiteScoring } from "./types";
 
 export async function generateOutreachAudit(scraped: ScrapedWebsiteData, scoring: WebsiteScoring, actor: AiActor) {
@@ -29,7 +29,10 @@ export async function generateOutreachAudit(scraped: ScrapedWebsiteData, scoring
     ] }, "writer");
     failureStage = "outreach-contract";
     const scope = `${scraped.crawl?.pageCount || 1} pages sampled; desktop/mobile homepage screenshots. Interaction checks are limited to explicitly recorded observations. No form, booking or payment submission. Not a full-site audit.`;
-    const audit: OutreachAudit = parseOutreach({ ...resolveOutreachCitations(JSON.parse(raw), packed, images), images, scope, technicalChecks: scraped.technicalChecks });
+    let audit: OutreachAudit = parseOutreach({ ...resolveOutreachCitations(JSON.parse(raw), packed, images), images, scope, technicalChecks: scraped.technicalChecks });
+    failureStage = "outreach-review";
+    const edited = await editAndReviewOutreach({ audit, evidence, catalog: packed, run });
+    audit = edited.audit;
     for (const finding of audit.findings) {
       if (finding.imageIndex !== null && finding.pageUrl !== images[finding.imageIndex].sourceUrl) throw new Error("Screenshot finding refers to a different page.");
       if (finding.imageIndex === null && !records.some(record => record.sourceUrl === finding.pageUrl && record.text.includes(finding.evidence))) throw new Error("Outreach finding has no matching exact page evidence.");
@@ -37,7 +40,7 @@ export async function generateOutreachAudit(scraped: ScrapedWebsiteData, scoring
     const base = generateFallbackRoast(scraped, scoring);
     const report: RoastResultPayload = { ...base, technicalChecks: scraped.technicalChecks, outreach: audit, diagnosis: undefined, first_impression: audit.summary, single_biggest_leak: audit.findings[0].observed, mistakes: audit.findings.map(finding => finding.observed), quick_fixes: audit.findings.map(finding => finding.fix), high_impact: audit.recommendationReason, lost_customers: "Potential friction is described per finding; no customer loss was measured.", tone_summary: audit.recommendation, evidence: audit.findings.map(finding => finding.evidence), claim_contract: audit.findings.map((finding, index) => ({ claim: finding.observed, source: finding.imageIndex !== null ? "visual" : records.find(record => record.sourceUrl === finding.pageUrl && record.text.includes(finding.evidence))!.source, sourceUrl: finding.pageUrl, evidence: finding.evidence, target: index === 0 ? "first_impression" : index === 1 ? "single_biggest_leak" : "mistake", severity: "medium", certainty: "observed" })) };
     failureStage = "outreach-review";
-    const review = await reviewReport({ model: run.model, report, evidence: JSON.stringify(evidence), run, images: images.map(image => image.dataUrl), outreach: true });
+    const review = edited.review;
     complete = review.passed;
     report.generation = { mode: complete ? "ai" : "hybrid", provider: run.provider, model: run.model, review, reason: complete ? undefined : "validation_failed", validationIssues: complete ? undefined : review.issues };
     return { roast: report, aiUsed: complete, fallbackUsed: !complete, error: complete ? undefined : `Mini-audit withheld: ${review.issues.join("; ")}` };

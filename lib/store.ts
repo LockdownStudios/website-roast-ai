@@ -39,12 +39,14 @@ import { buildBusinessProfile, buildCustomerJourneys } from "./businessProfile";
 import { LEGACY_ROAST_REPORT_CONTRACT_VERSION } from "./reportContract";
 import {
   findRoastReportByUrlAndHashFromSupabase,
+  getRecentOfficeRoastsFromSupabase,
   getRecoverableReportIdsByEmailFromSupabase,
   getRoastReportsByUserIdFromSupabase,
   getRoastReportByIdFromSupabase,
   isSupabaseConfigured,
   saveRoastReportToSupabase,
 } from "./supabase";
+import { OFFICE_REPORT_CACHE_MS, reusableOfficeReport } from "./officeRoastCache";
 import { normalizeRoastAccess } from "./reportAccess";
 import {
   createUnlockedAccess,
@@ -1188,6 +1190,14 @@ export async function findRoastByUrlAndHash(
       (item) => item.url === url && item.scrapeHash === scrapeHash,
     ) ?? null
   );
+}
+
+export async function findRecentOfficeRoast(url: string): Promise<StoredRoastReport | null> {
+  const now = Date.now();
+  const rows = isSupabaseConfigured() ? await getRecentOfficeRoastsFromSupabase(url, new Date(now - OFFICE_REPORT_CACHE_MS).toISOString()) : [];
+  for (const raw of rows) { const report = parseReport(raw); if (report && reusableOfficeReport(report, url, now)) return report; }
+  const local = await readStoreFile();
+  return local.reports.find(report => reusableOfficeReport(report, url, now)) || null;
 }
 
 export async function getRoastResultsByUserId(

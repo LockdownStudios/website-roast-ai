@@ -399,6 +399,13 @@ export async function findRoastReportByUrlAndHashFromSupabase(
   return fromRoastRow(rows[0]);
 }
 
+export async function getRecentOfficeRoastsFromSupabase(url: string, since: string): Promise<unknown[]> {
+  const rows = await supabaseFetch<SupabaseRoastRow[]>("roast_reports", { method: "GET", signal: AbortSignal.timeout(8000) }, new URLSearchParams({
+    select: ROAST_SELECT, url: `eq.${url}`, created_at: `gte.${since}`, "roast->access->>unlockSource": "eq.office", order: "created_at.desc", limit: "5",
+  }));
+  return (rows || []).map(fromRoastRow);
+}
+
 export async function getRoastReportsByUserIdFromSupabase(
   userId: string,
   limit: number,

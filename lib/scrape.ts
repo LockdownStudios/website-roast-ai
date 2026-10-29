@@ -1,4 +1,4 @@
-import { browserLaunchOptions } from "./browserRuntime";
+import { browserLaunchOptions, withBrowserSlot } from "./browserRuntime";
 import { pageUrlKey, deduplicatePages } from "./pageAliases";
 import { technicalChecksFromHtml } from "./technicalAudit";
 import type {
@@ -1223,7 +1223,7 @@ async function loadChromium(): Promise<BrowserTypeLike | null> {
   return null;
 }
 
-async function renderHtmlWithBrowser(url: string): Promise<string | null> {
+async function renderHtmlWithBrowserInSlot(url: string): Promise<string | null> {
   const chromium = await loadChromium();
   if (!chromium) {
     return null;
@@ -1258,6 +1258,10 @@ async function renderHtmlWithBrowser(url: string): Promise<string | null> {
       await browser.close();
     }
   }
+}
+
+async function renderHtmlWithBrowser(url: string): Promise<string | null> {
+  return withBrowserSlot(() => renderHtmlWithBrowserInSlot(url));
 }
 
 function shouldUseRenderedFallback(page: PageExtractResult): boolean {

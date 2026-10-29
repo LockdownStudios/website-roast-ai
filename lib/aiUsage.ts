@@ -70,7 +70,7 @@ export async function reserveAiRun(actor: AiActor, url: string) {
   const visual = outreach || actor.reportKind === "full_visual";
   if (visual && (policy.provider !== "openai" || policy.model !== "gpt-5.6-terra")) throw new AiUsageError("ai-visual-model", "Combined visual reports require the approved Terra policy.", 503);
   if (outreach && (actor.channel === "public" || policy.provider !== "openai" || policy.model !== "gpt-5.6-terra")) throw new AiUsageError("ai-outreach-access", "Visual outreach generation requires the private Office integration and approved Terra policy.", 403);
-  if (outreach) { policy.inputBytes = Math.min(policy.inputBytes, 36000); policy.writerTokens = Math.min(policy.writerTokens, 2400); }
+  if (outreach) { policy.inputBytes = Math.min(policy.inputBytes, 36000); policy.writerTokens = Math.min(policy.writerTokens, 2400); policy.reviewTokens = setting("ROAST_OUTREACH_REVIEW_MAX_TOKENS", 1800, 2200); }
   if (visual && !outreach) policy.inputBytes = Math.min(policy.inputBytes, 58000);
   const imageTokens = outreach ? 8192 : visual ? 16384 : 0;
   if (policy.provider === "openai") {

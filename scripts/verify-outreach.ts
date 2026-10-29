@@ -48,7 +48,7 @@ async function main() {
     assert.throws(() => run.prepare({ messages: [] }, "writer"), /exactly two/);
     assert.throws(() => run.prepare({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "https://untrusted.test/image", detail: "low" } }] }] }, "writer"), /bounded/);
     assert.equal(run.prepare({ messages }, "writer").max_completion_tokens, 2400);
-    assert.equal(run.prepare({ messages }, "review").max_completion_tokens, 800);
+    assert.equal(run.prepare({ messages }, "review").max_completion_tokens, 1800);
     assert.throws(() => run.prepare({ messages }, "review"), /request limit/);
     await run.finish("completed");
     assert.ok(estimateOpenAiRunUsd("gpt-5.6-terra", 36000, 2400, 800, 8192) < 0.40);

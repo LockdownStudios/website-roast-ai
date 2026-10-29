@@ -1,4 +1,4 @@
-import { browserLaunchOptions } from "./browserRuntime";
+import { browserLaunchOptions, withBrowserSlot } from "./browserRuntime";
 import "server-only";
 import { createHash } from "node:crypto";
 import { waitForVisualReadiness } from "./visualReadiness";
@@ -685,7 +685,7 @@ export function withoutVisualImageData(audit: VisualAudit): VisualAudit {
   };
 }
 
-export async function analyzeVisualSignals(
+async function analyzeVisualSignalsInBrowser(
   url: string,
   keyPageUrls: string[] = [],
 ): Promise<VisualAudit> {
@@ -779,4 +779,8 @@ export async function analyzeVisualSignals(
       await browser.close();
     }
   }
+}
+
+export function analyzeVisualSignals(url: string, keyPageUrls: string[] = []): Promise<VisualAudit> {
+  return withBrowserSlot(() => analyzeVisualSignalsInBrowser(url, keyPageUrls));
 }

@@ -1,4 +1,12 @@
 import "server-only";
+let browserTail = Promise.resolve();
+export async function withBrowserSlot<T>(work: () => Promise<T>): Promise<T> {
+  const previous = browserTail;
+  let release!: () => void;
+  browserTail = new Promise<void>(resolve => { release = resolve; });
+  await previous;
+  try { return await work(); } finally { release(); }
+}
 
 export async function browserLaunchOptions() {
   if (process.env.VERCEL === "1" && process.platform === "linux") {

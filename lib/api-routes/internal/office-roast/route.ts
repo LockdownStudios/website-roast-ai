@@ -4,7 +4,7 @@ import { extractBearerToken } from "@/lib/auth";
 import { generateOutreachAudit } from "@/lib/outreach";
 import { OUTREACH_CONTRACT_VERSION } from "@/lib/outreachContract";
 import { AiUsageError } from "@/lib/aiUsage";
-import { INCOMPLETE_REPORT_MESSAGE, isClientReadyReport } from "@/lib/reportQuality";
+import { isClientReadyReport } from "@/lib/reportQuality";
 import {
   createFreeTeaserAccess,
   createUnlockedAccess,
@@ -16,6 +16,7 @@ import { scrapeWebsite } from "@/lib/scrape";
 import { scoreWebsite } from "@/lib/scoring";
 import {
   findRoastByUrlAndHash,
+  findRecentOfficeRoast,
   saveRoastResult,
 } from "@/lib/store";
 import { clientIpFromHeaders, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as {
       url?: unknown;
       validateOnly?: unknown;
+      forceRefresh?: unknown;
     } | null;
     const normalizedUrl = normalizePublicUrl(body?.url);
 
@@ -203,10 +205,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scrapedBase = await scrapeWebsite(normalizedUrl);
+    const startedAt = Date.now();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
+    if (body?.validateOnly !== true && body?.forceRefresh !== true) {
+      const recent = await findRecentOfficeRoast(normalizedUrl);
+      if (recent) return NextResponse.json({ ...toOfficePayload({ report: recent, freshness: "cached", siteUrl }), cacheAgeSeconds: Math.floor((Date.now() - Date.parse(recent.createdAt)) / 1000) });
+    }
     // Outreach uses homepage desktop/mobile evidence only. Capturing additional
     // pages here wastes server resources and can starve the required captures.
-    const visualAudit = await analyzeVisualSignals(normalizedUrl);
+    const [scrapedBase, visualAudit] = await Promise.all([scrapeWebsite(normalizedUrl), analyzeVisualSignals(normalizedUrl)]);
+    console.info("[office-roast] evidence prepared", { url: normalizedUrl, elapsedMs: Date.now() - startedAt, pages: scrapedBase.crawl?.pageCount || 1 });
     const scraped = {
       ...scrapedBase,
       visualAudit,
@@ -218,8 +226,7 @@ export async function POST(request: NextRequest) {
       visual: { available: visualAudit.available, reason: visualAudit.reason, desktop: visualAudit.desktop?.captureReadiness, mobile: visualAudit.mobile?.captureReadiness },
     });
     const scrapeHash = createScrapeHash(scraped) + ":" + OUTREACH_CONTRACT_VERSION;
-    const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
+    const existing = body?.forceRefresh === true ? null : await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
 
     if (existing && isClientReadyReport(existing.roast)) {
       return NextResponse.json(
@@ -234,7 +241,7 @@ export async function POST(request: NextRequest) {
     const generation = await generateOutreachAudit(scraped, scoring, { channel: "office" });
     if (!isClientReadyReport(generation.roast)) {
       console.error("[office-roast] report review failed", { url: normalizedUrl, generation: generation.roast.generation, error: generation.error });
-      return NextResponse.json({ error: INCOMPLETE_REPORT_MESSAGE, code: "roast-generation-incomplete" }, { status: 502 });
+      return NextResponse.json({ error: "The evidence editor could not produce a verified report. No client report was saved. Review the listed issues before retrying.", code: "roast-generation-incomplete", reviewIssues: generation.roast.generation?.review?.issues || [] }, { status: 502 });
     }
     const safeRoast = withReportContract(
       sanitizeRoastPayload(generation.roast, scraped, scoring),
