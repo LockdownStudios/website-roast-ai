@@ -704,6 +704,7 @@ export async function analyzeVisualSignals(
   }
 
   let browser: BrowserLike | null = null;
+  const extraBrowsers: BrowserLike[] = [];
 
   try {
     browser = await chromium.launch(await browserLaunchOptions());
@@ -737,7 +738,11 @@ export async function analyzeVisualSignals(
         // Serialize the whole viewport lifecycle. A second page navigating or
         // animating can steal the serverless compositor even with a screenshot queue.
         const desktop = await analyzeViewport(browser!, normalized, VIEWPORTS[0], captureScreenshot);
-        const mobile = await analyzeViewport(browser!, normalized, VIEWPORTS[1], captureScreenshot);
+        // A second context in the same serverless process can stall for a minute.
+        // Give mobile its own Chromium process instead of reusing that process.
+        const mobileBrowser = await chromium.launch(await browserLaunchOptions());
+        extraBrowsers.push(mobileBrowser);
+        const mobile = await analyzeViewport(mobileBrowser, normalized, VIEWPORTS[1], captureScreenshot);
         const keyPages = [];
         for (const pageUrl of selectedKeyPages) {
             try {
@@ -785,8 +790,8 @@ export async function analyzeVisualSignals(
     console.error("[visual] capture failed", { message: reason.slice(0, 250), detail: reason.slice(-1600) });
     return unavailableAudit(reason);
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    await Promise.all([browser, ...extraBrowsers].filter((item): item is BrowserLike => Boolean(item)).map(item =>
+      withTimeout(item.close(), 5000, "Visual browser cleanup").catch(() => undefined),
+    ));
   }
 }
