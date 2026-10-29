@@ -1,10 +1,11 @@
 import type { CompactReport } from "./compactReportPdf";
 import type { OutreachAudit, StoredRoastReport, TechnicalCheck } from "./types";
 
-export function outreachReportPresentation(audit: OutreachAudit, name?: string): CompactReport {
+export function outreachReportPresentation(audit: OutreachAudit, name?: string, savedScore?: number): CompactReport {
   const url = audit.images[0].sourceUrl;
   return {
     name: name || new URL(url).hostname.replace(/^www\./, ""), url,
+    score: typeof savedScore === "number" && Number.isFinite(savedScore) && savedScore >= 0 && savedScore <= 10 ? savedScore : undefined,
     meta: "Website roast | visual, UX and technical evidence",
     summary: audit.summary,
     leak: `${audit.findings[0].observed} ${audit.findings[0].consequence}`,

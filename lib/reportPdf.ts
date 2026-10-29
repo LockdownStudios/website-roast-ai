@@ -63,7 +63,7 @@ export async function renderRoastReportPdf(
   if (options.internalDraftPreview && process.env.NODE_ENV !== "development") throw new Error("Draft PDF previews are available only in local development.");
   if (report.roast.outreach) {
     if (!isClientReadyReport(report.roast) && !options.internalDraftPreview) throw new Error("Outreach report has not passed review.");
-    return renderBrandedOutreachPdf(report.roast.outreach, Boolean(options.internalDraftPreview), reportSubject(report.url, report.scraped));
+    return renderBrandedOutreachPdf(report.roast.outreach, Boolean(options.internalDraftPreview), reportSubject(report.url, report.scraped), report.roast.score);
   }
   if (options.isUnlocked && (isClientReadyReport(report.roast) || options.internalDraftPreview)) return renderCompactFullReport(report, Boolean(options.internalDraftPreview));
   return new Promise<Buffer>((resolve, reject) => {
@@ -739,9 +739,9 @@ function formatDate(value: string) {
 
 
 /** The roast remains the narrative; technical checks support it rather than becoming a checklist page. */
-export function renderBrandedOutreachPdf(value: OutreachAudit, draft = false, subject?: string): Promise<Buffer> {
+export function renderBrandedOutreachPdf(value: OutreachAudit, draft = false, subject?: string, savedScore?: number): Promise<Buffer> {
   const audit = parseOutreach(value);
-  return renderCompactReportPdf(outreachReportPresentation(audit, subject), draft);
+  return renderCompactReportPdf(outreachReportPresentation(audit, subject, savedScore), draft);
 }
 
 function renderCompactFullReport(report: StoredRoastReport, draft: boolean) {
