@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { parseReportReview } from "../lib/reportReview";
+import { labelledReviewImages, parseReportReview } from "../lib/reportReview";
 import { isClientReadyReport, REPORT_REVIEW_VERSION } from "../lib/reportQuality";
 import type { RoastResultPayload } from "../lib/types";
 import { scoreWebsite } from "../lib/scoring";
@@ -20,6 +20,11 @@ async function main() {
   assert.equal(parseReportReview({ evidenceSupported: true, businessAppropriate: true, scopeHonest: false, actionsUseful: true, issues: [] }).passed, false);
   assert.equal(parseReportReview(null).passed, false);
   assert.equal(review.version, REPORT_REVIEW_VERSION);
+  const images = labelledReviewImages(["desktop-data", "mobile-data"], [{label: "Desktop homepage",sourceUrl:"https://example.com/"},{label:"Mobile homepage",sourceUrl:"https://example.com/"}]);
+  assert.match(images[0].text!, /imageIndex=0 .*Desktop homepage/);
+  assert.equal(images[1].image_url!.url, "desktop-data");
+  assert.match(images[2].text!, /imageIndex=1 .*Mobile homepage/);
+  assert.equal(images[3].image_url!.url, "mobile-data");
   assert.equal(isClientReadyReport({ ...reviewed, claim_contract: [] }), false);
   assert.equal(scoreWebsite({ ...fixture.scraped, visualAudit: undefined }).visualDesign, undefined);
   assert.equal(parseBusinessDiagnosis({ businessModel: "invented" }), null);

@@ -36,6 +36,12 @@ async function main() {
     const intro = await check('<main><p>Brand intro</p><a href="#">PLAY</a><a href="#">SKIP</a></main>');
     assert.equal(intro.settled, false);
     assert.ok(intro.reasons.includes("Intro screen requires interaction"));
+    const mockFonts = `<script>Object.defineProperty(document.fonts,'status',{configurable:true,get:()=> 'loading'});document.fonts.check=(font)=>!font.includes('PendingVisibleFont');</script>`;
+    const unrelatedFont = await check(content + mockFonts);
+    assert.equal(unrelatedFont.settled, true, "Unrelated/offscreen font downloads must not block a ready viewport");
+    const relevantFont = await check('<main><h1 style="font-family:PendingVisibleFont, sans-serif">Waiting for the visible heading font</h1></main>' + mockFonts);
+    assert.equal(relevantFont.settled, false, "Fonts required by visible text must still settle");
+    assert.ok(relevantFont.reasons.includes("Fonts still loading"));
     console.log("Visual readiness checks passed: stable page, blocked/delayed/interactive intros, hidden loader and broken image.");
   } finally { await browser.close(); }
 }

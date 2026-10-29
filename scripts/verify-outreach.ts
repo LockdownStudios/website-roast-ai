@@ -18,6 +18,8 @@ async function main() {
     const resolved = resolveOutreachCitations({ findings: [{ imageIndex: null, evidenceId: "e0", pageId: "p0" }] }, catalog, fixture.images);
     assert.equal((resolved.findings[0] as { evidence: string }).evidence, "Exact site evidence");
     assert.equal(resolved.findings[0].pageUrl, image.sourceUrl);
+    const visualReference = resolveOutreachCitations({ findings: [{ imageIndex: 1, evidence: "Wrong screenshot number from model" }] }, catalog, [image, {...image,label:"Mobile homepage"}]);
+    assert.equal(visualReference.findings[0].evidence, "Mobile homepage; imageIndex=1 (zero-based).");
     assert.throws(() => resolveOutreachCitations({ findings: [{ imageIndex: null, evidenceId: "e0", pageId: "p1" }] }, catalog, fixture.images), /different page/);
     assert.equal(parseOutreach({ ...fixture, findings: [finding] }).findings.length, 1);
     assert.throws(() => parseOutreach({ ...fixture, findings: [] }));

@@ -332,7 +332,14 @@ async function analyzeViewport(
       return true;
     }, undefined);
     if (skippedIntro) interactionNotes.push("Clicked the visible Skip intro control before capturing the settled homepage.");
-    const captureReadiness = await page.evaluate(waitForVisualReadiness, 6000);
+    let captureReadiness = await page.evaluate(waitForVisualReadiness, 6000);
+    if (!captureReadiness.settled && captureReadiness.reasons.length > 0 && captureReadiness.reasons.every(reason => reason === "Fonts still loading")) {
+      // Give a slow visible webfont one extra bounded wait, without rerunning
+      // the crawl, taking another paid AI attempt or accepting fallback pixels.
+      await page.bringToFront();
+      captureReadiness = await page.evaluate(waitForVisualReadiness, 6000);
+      interactionNotes.push("Allowed one additional bounded wait for visible webfonts before capturing.");
+    }
     note("readiness");
 
     const raw = await page.evaluate<ViewportRawMetrics, { ctaPattern: string }>(

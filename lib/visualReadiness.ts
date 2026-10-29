@@ -23,7 +23,15 @@ export async function waitForVisualReadiness(timeoutMs: number): Promise<VisualR
       }
       return true;
     };
-    if (document.fonts.status !== "loaded") reasons.push("Fonts still loading");
+    // FontFaceSet.status includes fonts used only by hidden/off-screen content.
+    // Only pending fonts used by visible text can invalidate this viewport.
+    if (document.fonts.status !== "loaded" && [...document.querySelectorAll('h1,h2,h3,h4,p,a,button,li,label,span')].filter(visible).slice(0, 160).some(element => {
+      const text = (element.textContent || "").trim().slice(0, 80);
+      if (!text) return false;
+      const style = getComputedStyle(element);
+      try { return !document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, text); }
+      catch { return true; }
+    })) reasons.push("Fonts still loading");
     if ([...document.querySelectorAll("a, button, [role=button]")].some(element => visible(element) && /^skip(?: intro)?$/i.test((element.textContent || "").trim()))) {
       reasons.push("Intro screen requires interaction");
     }

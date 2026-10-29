@@ -37,7 +37,7 @@ export const outreachResponseFormat = { type: "json_schema", json_schema: { name
 
 export function resolveOutreachCitations(raw: { findings: Array<Record<string, unknown>> }, catalog: { pages: string[]; entries: Array<[string, string, number[]]> }, images: OutreachAudit["images"]) {
   return { ...raw, findings: raw.findings.map(finding => {
-    if (finding.imageIndex === 0 || finding.imageIndex === 1) return { ...finding, pageUrl: images[finding.imageIndex].sourceUrl };
+    if (finding.imageIndex === 0 || finding.imageIndex === 1) return { ...finding, pageUrl: images[finding.imageIndex].sourceUrl, evidence: `${images[finding.imageIndex].label}; imageIndex=${finding.imageIndex} (zero-based).` };
     const entryIndex = typeof finding.evidenceId === "string" && /^e(?:0|[1-9]\d*)$/.test(finding.evidenceId) ? Number(finding.evidenceId.slice(1)) : NaN;
     const pageIndex = typeof finding.pageId === "string" && /^p(?:0|[1-9]\d*)$/.test(finding.pageId) ? Number(finding.pageId.slice(1)) : NaN;
     if (!Number.isInteger(entryIndex) || !Number.isInteger(pageIndex)) throw new Error("Citation requires exact evidence and page IDs.");
