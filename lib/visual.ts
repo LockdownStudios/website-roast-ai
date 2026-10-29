@@ -647,8 +647,10 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
-    await withTimeout(context.close(), 3000, "Visual context cleanup").catch(() => undefined);
-    note("closed");
+    // Keep contexts alive until all viewport screenshots finish. Disposing one
+    // context while another is rasterising can stall serverless Chromium.
+    // analyzeVisualSignals always closes their owning browser in its finally.
+    note("viewport-finished");
   }
 }
 
