@@ -738,7 +738,7 @@ export async function analyzeVisualSignals(
       error instanceof Error
         ? error.message
         : "failed to render page for visual analysis";
-    console.error("[visual] capture failed", { message: reason.slice(0, 600) });
+    console.error("[visual] capture failed", { message: reason.slice(0, 250), detail: reason.slice(-1600) });
     return unavailableAudit(reason);
   } finally {
     if (browser) {
