@@ -320,7 +320,7 @@ async function analyzeViewport(
     await page.bringToFront();
     await page.goto(url, {
       waitUntil: "domcontentloaded",
-      timeout: 12000,
+      timeout: 30000,
     });
     note("navigated");
     await page.evaluate<void>("var __name = (fn) => fn;");
