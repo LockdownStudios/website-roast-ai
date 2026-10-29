@@ -315,6 +315,9 @@ async function analyzeViewport(
 
   try {
     const page = await context.newPage();
+    // Focus before readiness polling, not only before screenshot capture.
+    // Background tabs can throttle timers/animations and never appear settled.
+    await page.bringToFront();
     await page.goto(url, {
       waitUntil: "domcontentloaded",
       timeout: 12000,
