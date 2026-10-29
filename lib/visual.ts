@@ -33,6 +33,7 @@ type BrowserContextLike = {
 };
 
 type PageLike = {
+  context: () => { newCDPSession: (page: PageLike) => Promise<{ send: (method: string, params: Record<string, unknown>) => Promise<{ data: string }>; detach: () => Promise<void> }> };
   close: () => Promise<void>;
   bringToFront: () => Promise<void>;
   goto: (
@@ -712,6 +713,16 @@ export async function analyzeVisualSignals(
     const captureScreenshot = (page: PageLike) => {
       const capture = captureQueue.then(async () => {
         await page.bringToFront();
+        if (process.env.VERCEL === "1") {
+          // Chromium's native capture avoids Playwright's animation/RAF waiting
+          // path, which can hang in the serverless compositor after fonts load.
+          await page.evaluate(() => { for (const animation of document.getAnimations()) animation.pause(); }, undefined);
+          const session = await page.context().newCDPSession(page);
+          try {
+            const result = await withTimeout(session.send("Page.captureScreenshot", { format: "jpeg", quality: 58, fromSurface: true, captureBeyondViewport: false, optimizeForSpeed: true }), 20_000, "Native viewport capture");
+            return Buffer.from(result.data, "base64");
+          } finally { await session.detach().catch(() => undefined); }
+        }
         return page.screenshot({ type: "jpeg", quality: 58, fullPage: false, timeout: 20_000, animations: "disabled" });
       });
       captureQueue = capture.then(() => undefined, () => undefined);
