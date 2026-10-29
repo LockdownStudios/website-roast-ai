@@ -8,12 +8,14 @@ async function main() {
   let requests = 0;
   let allow = true;
   const reservations: Record<string, unknown>[] = [];
+  const officeEntries: Record<string, unknown>[] = [];
   globalThis.fetch = async (_url, init) => {
     requests++;
     if (String(_url).includes("rpc/")) {
       reservations.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify({ allowed: allow }));
     }
+    if (init?.method === "POST" && String(_url).endsWith("/roast_ai_runs")) officeEntries.push(JSON.parse(String(init.body)));
     return new Response(null, { status: 204 });
   };
   try {
@@ -49,7 +51,9 @@ async function main() {
     assert.throws(() => run.prepare({}, "writer"), /request limit/);
     await run.finish("failed");
     const office = await reserveAiRun({ channel: "office" }, "https://example.com");
-    assert.equal(reservations[1].p_actor_limit, 10);
+    assert.equal(reservations.length, 1, "Staff must not use the quota/cooldown RPC");
+    assert.equal(officeEntries[0].channel, "office");
+    assert.ok(Number(officeEntries[0].reserved_units) > 0, "Staff usage must still be recorded");
     assert.throws(() => office.prepare({ input: "x".repeat(80001) }, "writer"), /input allowance/);
     assert.throws(() => office.prepare({ content: [{ type: "image_url" }] }, "writer"), /Image API/);
     assert.throws(() => office.prepare({ tools: [{ type: "web_search" }] }, "writer"), /Only text/);
@@ -62,7 +66,10 @@ async function main() {
     await assert.rejects(reserveAiRun({ channel: "office" }, "https://example.com"), /MAX_RUN_USD/);
     delete process.env.ROAST_AI_MAX_RUN_USD;
     allow = false;
-    await assert.rejects(reserveAiRun({ channel: "office" }, "https://example.com"), /allowance/);
+    await assert.rejects(reserveAiRun({ channel: "public", userId: "user-test" }, "https://example.com"), /allowance/);
+    const staff = await reserveAiRun({ channel: "office" }, "https://example.com");
+    await staff.finish("completed");
+    assert.equal(officeEntries.length, 2, "Office scans proceed even when public quotas reject requests");
     globalThis.fetch = async () => new Response("unavailable", { status: 503 });
     await assert.rejects(reserveAiRun({ channel: "office" }, "https://example.com"), /No new AI request/);
     globalThis.fetch = async () => { throw new TypeError("fetch failed"); };

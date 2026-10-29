@@ -26,7 +26,6 @@ export function aiPolicy() {
     model,
     allowedModels: (process.env.ROAST_AI_ALLOWED_MODELS || defaultModel).split(",").map(value => value.trim()).filter(Boolean),
     userDaily: setting("ROAST_USER_DAILY_LIMIT", 3, 100),
-    officeDaily: setting("ROAST_OFFICE_DAILY_LIMIT", 10, 200),
     globalDaily: setting("ROAST_GLOBAL_DAILY_LIMIT", 20, 500),
     dailyUnits: setting("ROAST_AI_DAILY_BUDGET_UNITS", 1_000_000, 100_000_000),
     monthlyUnits: setting("ROAST_AI_MONTHLY_BUDGET_UNITS", 10_000_000, 1_000_000_000),
@@ -84,15 +83,26 @@ export async function reserveAiRun(actor: AiActor, url: string) {
   }
   const id = randomUUID();
   const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  const units = policy.inputBytes * 2 + policy.writerTokens + policy.reviewTokens + 2048 + imageTokens;
+  if (actor.channel === "office") {
+    // Only the shared-secret authenticated internal route supplies this channel.
+    // Staff scans remain metered, but public quotas/cooldowns cannot deny them.
+    // Provider access, per-run cost, input/output and two-call caps still apply.
+    await ledger("roast_ai_runs", { method: "POST", body: JSON.stringify({
+      id, actor_hash: hash(`office:${actor.userId || "shared"}`), channel: "office",
+      site_hash: hash(url), model: `${policy.provider}:${policy.model}`, reserved_units: units,
+    }) });
+  } else {
   const response = await ledger("rpc/reserve_roast_ai_run", { method: "POST", body: JSON.stringify({
     p_id: id, p_actor: hash(`${actor.channel}:${actor.userId || "shared"}`), p_channel: actor.channel,
     p_site: hash(url), p_model: `${policy.provider}:${policy.model}`,
-    p_units: policy.inputBytes * 2 + policy.writerTokens + policy.reviewTokens + 2048 + imageTokens,
-    p_actor_limit: actor.channel === "office" ? policy.officeDaily : actor.channel === "development" ? setting("ROAST_DEVELOPMENT_DAILY_LIMIT", 1, 2) : policy.userDaily,
+    p_units: units,
+    p_actor_limit: actor.channel === "development" ? setting("ROAST_DEVELOPMENT_DAILY_LIMIT", 1, 2) : policy.userDaily,
     p_global_limit: policy.globalDaily, p_daily_units: policy.dailyUnits, p_monthly_units: policy.monthlyUnits,
   }) });
   const result = await response.json();
   if (result?.allowed !== true) throw new AiUsageError("ai-limit-reached", "The scan allowance, cooldown or shared AI budget has been reached. Try again later.");
+  }
   let calls = 0;
   let inputTokens = 0;
   let outputTokens = 0;
