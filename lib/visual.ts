@@ -708,7 +708,7 @@ export async function analyzeVisualSignals(
           }),
         ),
       ]),
-      28000,
+      process.env.VERCEL === "1" ? 60_000 : 28_000,
       "Visual analysis",
     );
     if (!desktop.captureReadiness?.settled || !mobile.captureReadiness?.settled) {

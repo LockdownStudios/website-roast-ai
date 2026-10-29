@@ -203,10 +203,9 @@ export async function POST(request: NextRequest) {
     }
 
     const scrapedBase = await scrapeWebsite(normalizedUrl);
-    const keyPageUrls = (scrapedBase.crawl?.pages ?? [])
-      .filter((page) => (page.ctaEvidence?.length ?? 0) > 0)
-      .map((page) => page.url);
-    const visualAudit = await analyzeVisualSignals(normalizedUrl, keyPageUrls);
+    // Outreach uses homepage desktop/mobile evidence only. Capturing additional
+    // pages here wastes server resources and can starve the required captures.
+    const visualAudit = await analyzeVisualSignals(normalizedUrl);
     const scraped = {
       ...scrapedBase,
       visualAudit,
