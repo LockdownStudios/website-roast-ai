@@ -144,7 +144,8 @@ async function loadChromium(): Promise<BrowserTypeLike | null> {
       return chromium as BrowserTypeLike;
     }
     return null;
-  } catch {
+  } catch (error) {
+    console.error("[visual] Playwright import failed", { message: error instanceof Error ? error.message.slice(0, 600) : "unknown" });
     return null;
   }
 }
@@ -737,6 +738,7 @@ export async function analyzeVisualSignals(
       error instanceof Error
         ? error.message
         : "failed to render page for visual analysis";
+    console.error("[visual] capture failed", { message: reason.slice(0, 600) });
     return unavailableAudit(reason);
   } finally {
     if (browser) {

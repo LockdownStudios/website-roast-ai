@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => null)) as {
       url?: unknown;
+      validateOnly?: unknown;
     } | null;
     const normalizedUrl = normalizePublicUrl(body?.url);
 
@@ -211,6 +212,11 @@ export async function POST(request: NextRequest) {
       visualAudit,
     };
     const scoring = scoreWebsite(scraped);
+    if (body?.validateOnly === true) return NextResponse.json({
+      generationRequested: false,
+      pages: scraped.crawl?.pageCount || 1,
+      visual: { available: visualAudit.available, reason: visualAudit.reason, desktop: visualAudit.desktop?.captureReadiness, mobile: visualAudit.mobile?.captureReadiness },
+    });
     const scrapeHash = createScrapeHash(scraped) + ":outreach-v1";
     const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
