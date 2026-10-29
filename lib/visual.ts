@@ -33,6 +33,7 @@ type BrowserContextLike = {
 };
 
 type PageLike = {
+  close: () => Promise<void>;
   bringToFront: () => Promise<void>;
   goto: (
     url: string,
@@ -312,9 +313,9 @@ async function analyzeViewport(
     userAgent: preset.userAgent,
   });
   note("context");
-
+  let page: PageLike | undefined;
   try {
-    const page = await context.newPage();
+    page = await context.newPage();
     // Focus before readiness polling, not only before screenshot capture.
     // Background tabs can throttle timers/animations and never appear settled.
     await page.bringToFront();
@@ -651,6 +652,11 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
+    // Stop the finished page's scripts/media before opening the next viewport.
+    // Retain its context: disposing the active context can stall this runtime.
+    if (page) await withTimeout(page.close(), 5000, "Capture page cleanup").catch(() => {
+      console.warn("[visual] page cleanup delayed", { viewport: preset.name });
+    });
     // Serverless Chromium can stall when its active context is disposed before
     // the next one opens. Retain contexts until the owning browser closes.
     note("viewport-finished");
