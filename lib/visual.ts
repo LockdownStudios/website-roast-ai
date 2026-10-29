@@ -46,6 +46,7 @@ type PageLike = {
     type: "jpeg";
     quality: number;
     fullPage: boolean;
+    timeout?: number;
   }) => Promise<Buffer>;
 };
 
@@ -299,12 +300,15 @@ async function analyzeViewport(
   url: string,
   preset: ViewportPreset,
 ): Promise<VisualViewportMetrics> {
+  const started = Date.now();
+  const note = (stage: string) => { if (process.env.VERCEL === "1") console.info("[visual] progress", { viewport: preset.name, stage, elapsedMs: Date.now() - started }); };
   const context = await browser.newContext({
     viewport: { width: preset.width, height: preset.height },
     isMobile: preset.isMobile,
     hasTouch: preset.hasTouch,
     userAgent: preset.userAgent,
   });
+  note("context");
 
   try {
     const page = await context.newPage();
@@ -312,6 +316,7 @@ async function analyzeViewport(
       waitUntil: "domcontentloaded",
       timeout: 12000,
     });
+    note("navigated");
     await page.evaluate<void>("var __name = (fn) => fn;");
     const interactionNotes: string[] = [];
     const skippedIntro = await page.evaluate(() => {
@@ -322,6 +327,7 @@ async function analyzeViewport(
     }, undefined);
     if (skippedIntro) interactionNotes.push("Clicked the visible Skip intro control before capturing the settled homepage.");
     const captureReadiness = await page.evaluate(waitForVisualReadiness, 6000);
+    note("readiness");
 
     const raw = await page.evaluate<ViewportRawMetrics, { ctaPattern: string }>(
       ({ ctaPattern }) => {
@@ -609,11 +615,14 @@ async function analyzeViewport(
         ctaPattern: CTA_REGEX_SOURCE,
       },
     );
+    note("metrics");
     const screenshot = await page.screenshot({
       type: "jpeg",
       quality: 58,
       fullPage: false,
+      timeout: 12_000,
     });
+    note("screenshot");
 
     return {
       viewport: preset.name,
@@ -640,7 +649,8 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
-    await context.close();
+    await withTimeout(context.close(), 3000, "Visual context cleanup").catch(() => undefined);
+    note("closed");
   }
 }
 
