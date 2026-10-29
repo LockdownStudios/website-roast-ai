@@ -300,6 +300,7 @@ async function analyzeViewport(
   browser: BrowserLike,
   url: string,
   preset: ViewportPreset,
+  captureScreenshot: (page: PageLike) => Promise<Buffer>,
 ): Promise<VisualViewportMetrics> {
   const started = Date.now();
   const note = (stage: string) => { if (process.env.VERCEL === "1") console.info("[visual] progress", { viewport: preset.name, stage, elapsedMs: Date.now() - started }); };
@@ -617,13 +618,7 @@ async function analyzeViewport(
       },
     );
     note("metrics");
-    const screenshot = await page.screenshot({
-      type: "jpeg",
-      quality: 58,
-      fullPage: false,
-      timeout: 12_000,
-      animations: "disabled",
-    });
+    const screenshot = await captureScreenshot(page);
     interactionNotes.push("Paused ongoing animations for the still capture; the screenshot does not establish motion or scrolling behaviour.");
     note("screenshot");
 
@@ -700,20 +695,28 @@ export async function analyzeVisualSignals(
 
   try {
     browser = await chromium.launch(await browserLaunchOptions());
+    // Capture one image at a time: concurrent rasterisation can starve the
+    // serverless renderer even after both DOMs have settled.
+    let captureQueue = Promise.resolve();
+    const captureScreenshot = (page: PageLike) => {
+      const capture = captureQueue.then(() => page.screenshot({ type: "jpeg", quality: 58, fullPage: false, timeout: 20_000, animations: "disabled" }));
+      captureQueue = capture.then(() => undefined, () => undefined);
+      return capture;
+    };
 
     const selectedKeyPages = [...new Set(keyPageUrls)]
       .filter((pageUrl) => pageUrl !== normalized && /^https?:\/\//i.test(pageUrl))
       .slice(0, 2);
     const [desktop, mobile, keyPages] = await withTimeout(
       Promise.all([
-        analyzeViewport(browser, normalized, VIEWPORTS[0]),
-        analyzeViewport(browser, normalized, VIEWPORTS[1]),
+        analyzeViewport(browser, normalized, VIEWPORTS[0], captureScreenshot),
+        analyzeViewport(browser, normalized, VIEWPORTS[1], captureScreenshot),
         Promise.all(
           selectedKeyPages.map(async (pageUrl) => {
             try {
               return {
                 url: pageUrl,
-                desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0]),
+                desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0], captureScreenshot),
               };
             } catch {
               return null;
