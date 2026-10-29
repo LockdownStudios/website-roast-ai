@@ -33,8 +33,6 @@ type BrowserContextLike = {
 };
 
 type PageLike = {
-  context: () => { newCDPSession: (page: PageLike) => Promise<{ send: (method: string, params: Record<string, unknown>) => Promise<{ data: string }>; detach: () => Promise<void> }> };
-  close: () => Promise<void>;
   bringToFront: () => Promise<void>;
   goto: (
     url: string,
@@ -314,9 +312,9 @@ async function analyzeViewport(
     userAgent: preset.userAgent,
   });
   note("context");
-  let page: PageLike | undefined;
+
   try {
-    page = await context.newPage();
+    const page = await context.newPage();
     // Focus before readiness polling, not only before screenshot capture.
     // Background tabs can throttle timers/animations and never appear settled.
     await page.bringToFront();
@@ -653,11 +651,6 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
-    // Stop the finished page's scripts/media before opening the next viewport.
-    // Retain its context: disposing the active context can stall this runtime.
-    if (page) await withTimeout(page.close(), 5000, "Capture page cleanup").catch(() => {
-      console.warn("[visual] page cleanup delayed", { viewport: preset.name });
-    });
     // Serverless Chromium can stall when its active context is disposed before
     // the next one opens. Retain contexts until the owning browser closes.
     note("viewport-finished");
@@ -704,7 +697,6 @@ export async function analyzeVisualSignals(
   }
 
   let browser: BrowserLike | null = null;
-  const extraBrowsers: BrowserLike[] = [];
 
   try {
     browser = await chromium.launch(await browserLaunchOptions());
@@ -714,16 +706,6 @@ export async function analyzeVisualSignals(
     const captureScreenshot = (page: PageLike) => {
       const capture = captureQueue.then(async () => {
         await page.bringToFront();
-        if (process.env.VERCEL === "1") {
-          // Chromium's native capture avoids Playwright's animation/RAF waiting
-          // path, which can hang in the serverless compositor after fonts load.
-          await page.evaluate(() => { for (const animation of document.getAnimations()) animation.pause(); }, undefined);
-          const session = await page.context().newCDPSession(page);
-          try {
-            const result = await withTimeout(session.send("Page.captureScreenshot", { format: "jpeg", quality: 58, fromSurface: true, captureBeyondViewport: false, optimizeForSpeed: true }), 20_000, "Native viewport capture");
-            return Buffer.from(result.data, "base64");
-          } finally { await session.detach().catch(() => undefined); }
-        }
         return page.screenshot({ type: "jpeg", quality: 58, fullPage: false, timeout: 20_000, animations: "disabled" });
       });
       captureQueue = capture.then(() => undefined, () => undefined);
@@ -738,22 +720,13 @@ export async function analyzeVisualSignals(
         // Serialize the whole viewport lifecycle. A second page navigating or
         // animating can steal the serverless compositor even with a screenshot queue.
         const desktop = await analyzeViewport(browser!, normalized, VIEWPORTS[0], captureScreenshot);
-        extraBrowsers.push(browser!);
-        await withTimeout(browser!.close(), 5000, "Desktop browser cleanup").catch(() => {
-          console.warn("[visual] desktop browser cleanup delayed");
-        });
-        browser = null;
-        // A second context in the same serverless process can stall for a minute.
-        // Give mobile its own Chromium process instead of reusing that process.
-        const mobileBrowser = await chromium.launch(await browserLaunchOptions());
-        extraBrowsers.push(mobileBrowser);
-        const mobile = await analyzeViewport(mobileBrowser, normalized, VIEWPORTS[1], captureScreenshot);
+        const mobile = await analyzeViewport(browser!, normalized, VIEWPORTS[1], captureScreenshot);
         const keyPages = [];
         for (const pageUrl of selectedKeyPages) {
             try {
               keyPages.push({
                 url: pageUrl,
-                desktop: await analyzeViewport(mobileBrowser, pageUrl, VIEWPORTS[0], captureScreenshot),
+                desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0], captureScreenshot),
               });
             } catch {
               // Optional key pages must not invalidate the required home views.
@@ -795,8 +768,8 @@ export async function analyzeVisualSignals(
     console.error("[visual] capture failed", { message: reason.slice(0, 250), detail: reason.slice(-1600) });
     return unavailableAudit(reason);
   } finally {
-    await Promise.all([browser, ...extraBrowsers].filter((item): item is BrowserLike => Boolean(item)).map(item =>
-      withTimeout(item.close(), 5000, "Visual browser cleanup").catch(() => undefined),
-    ));
+    if (browser) {
+      await browser.close();
+    }
   }
 }
