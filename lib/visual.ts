@@ -738,7 +738,10 @@ export async function analyzeVisualSignals(
         // Serialize the whole viewport lifecycle. A second page navigating or
         // animating can steal the serverless compositor even with a screenshot queue.
         const desktop = await analyzeViewport(browser!, normalized, VIEWPORTS[0], captureScreenshot);
-        await withTimeout(browser!.close(), 5000, "Desktop browser cleanup");
+        extraBrowsers.push(browser!);
+        await withTimeout(browser!.close(), 5000, "Desktop browser cleanup").catch(() => {
+          console.warn("[visual] desktop browser cleanup delayed");
+        });
         browser = null;
         // A second context in the same serverless process can stall for a minute.
         // Give mobile its own Chromium process instead of reusing that process.
