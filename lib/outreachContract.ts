@@ -1,6 +1,9 @@
 import { normalizeTechnicalChecks } from "./technicalAudit";
 import type { OutreachAudit } from "./types";
 
+export const MIN_OUTREACH_FINDINGS = 1;
+export const OUTREACH_CONTRACT_VERSION = "outreach-v2";
+
 export function parseOutreach(value: unknown): OutreachAudit {
   const audit = value as OutreachAudit;
   if (audit?.technicalChecks) normalizeTechnicalChecks(audit.technicalChecks);
@@ -8,7 +11,14 @@ export function parseOutreach(value: unknown): OutreachAudit {
   if (!audit || !text(audit.summary, 450) || !text(audit.recommendationReason, 350) || !text(audit.scope, 700) || !["small improvements", "targeted refresh", "substantial remodel"].includes(audit.recommendation)) throw new Error("Invalid outreach summary, scope or recommendation.");
   if (!Array.isArray(audit.strengths) || audit.strengths.length < 1 || audit.strengths.length > 3 || audit.strengths.some(item => !text(item, 180))) throw new Error("Outreach requires specific strengths.");
   if (!Array.isArray(audit.images) || audit.images.length !== 2 || audit.images.some(image => !text(image.label, 100) || !text(image.sourceUrl, 2000) || typeof image.dataUrl !== "string" || image.dataUrl.length > 350000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image.dataUrl))) throw new Error("Outreach requires two bounded captured screenshots.");
-  if (!Array.isArray(audit.findings) || audit.findings.length < 3 || audit.findings.length > 5 || audit.findings.some(finding => !["visual", "navigation", "interaction", "content", "technical"].includes(finding.category) || (finding.headline !== undefined && !text(finding.headline, 90)) || !text(finding.observed, 180) || !text(finding.pageUrl, 2000) || !text(finding.consequence, 160) || !text(finding.fix, 220) || !text(finding.evidence, 180) || ![null, 0, 1].includes(finding.imageIndex))) throw new Error("Outreach requires 3-5 concise, evidenced findings.");
+  if (!Array.isArray(audit.findings) || audit.findings.length < MIN_OUTREACH_FINDINGS || audit.findings.length > 5) throw new Error("Outreach requires 1-5 concise, evidenced findings.");
+  for (const [index, finding] of audit.findings.entries()) {
+    for (const [field, max] of [["headline", 90], ["observed", 180], ["pageUrl", 2000], ["consequence", 160], ["fix", 220], ["evidence", 180]] as const) {
+      if (field === "headline" && finding[field] === undefined) continue;
+      if (!text(finding[field], max)) throw new Error(`Outreach finding ${index + 1}: ${field} must contain 1-${max} characters.`);
+    }
+    if (!["visual", "navigation", "interaction", "content", "technical"].includes(finding.category) || ![null, 0, 1].includes(finding.imageIndex)) throw new Error(`Outreach finding ${index + 1}: invalid category or screenshot reference.`);
+  }
   if (new Set(audit.findings.map(f => f.observed.trim().toLowerCase())).size !== audit.findings.length) throw new Error("Outreach findings must be distinct.");
   for (const url of [...audit.images.map(image => image.sourceUrl), ...audit.findings.map(f => f.pageUrl)]) {
     if (!/^https?:$/.test(new URL(url).protocol)) throw new Error("Outreach evidence requires public page URLs.");
@@ -17,11 +27,11 @@ export function parseOutreach(value: unknown): OutreachAudit {
   return audit;
 }
 
-const text = { type: "string" };
+const boundedText = (max: number) => ({ type: "string", pattern: `^[\\s\\S]{1,${max}}$` });
 export const outreachResponseFormat = { type: "json_schema", json_schema: { name: "website_outreach_mini_audit", strict: true, schema: {
   type: "object", additionalProperties: false, properties: {
-    summary: text, strengths: { type: "array", items: text }, recommendation: { type: "string", enum: ["small improvements", "targeted refresh", "substantial remodel"] }, recommendationReason: text,
-    findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { headline: text, category: { type: "string", enum: ["visual", "navigation", "interaction", "content", "technical"] }, observed: text, pageId: { type: ["string", "null"] }, evidenceId: { type: ["string", "null"] }, consequence: text, fix: text, evidence: text, imageIndex: { type: ["integer", "null"] } }, required: ["headline", "category", "observed", "pageId", "evidenceId", "consequence", "fix", "evidence", "imageIndex"] } }
+    summary: boundedText(450), strengths: { type: "array", minItems: 1, maxItems: 3, items: boundedText(180) }, recommendation: { type: "string", enum: ["small improvements", "targeted refresh", "substantial remodel"] }, recommendationReason: boundedText(350),
+    findings: { type: "array", minItems: MIN_OUTREACH_FINDINGS, maxItems: 5, items: { type: "object", additionalProperties: false, properties: { headline: boundedText(90), category: { type: "string", enum: ["visual", "navigation", "interaction", "content", "technical"] }, observed: boundedText(180), pageId: { type: ["string", "null"], pattern: "^p(0|[1-9][0-9]*)$" }, evidenceId: { type: ["string", "null"], pattern: "^e(0|[1-9][0-9]*)$" }, consequence: boundedText(160), fix: boundedText(220), evidence: boundedText(180), imageIndex: { type: ["integer", "null"], enum: [null, 0, 1] } }, required: ["headline", "category", "observed", "pageId", "evidenceId", "consequence", "fix", "evidence", "imageIndex"] } }
   }, required: ["summary", "strengths", "recommendation", "recommendationReason", "findings"]
 } } };
 

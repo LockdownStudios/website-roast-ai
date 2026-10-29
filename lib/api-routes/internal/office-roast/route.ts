@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { extractBearerToken } from "@/lib/auth";
 import { generateOutreachAudit } from "@/lib/outreach";
+import { OUTREACH_CONTRACT_VERSION } from "@/lib/outreachContract";
 import { AiUsageError } from "@/lib/aiUsage";
 import { INCOMPLETE_REPORT_MESSAGE, isClientReadyReport } from "@/lib/reportQuality";
 import {
@@ -216,7 +217,7 @@ export async function POST(request: NextRequest) {
       pages: scraped.crawl?.pageCount || 1,
       visual: { available: visualAudit.available, reason: visualAudit.reason, desktop: visualAudit.desktop?.captureReadiness, mobile: visualAudit.mobile?.captureReadiness },
     });
-    const scrapeHash = createScrapeHash(scraped) + ":outreach-v1";
+    const scrapeHash = createScrapeHash(scraped) + ":" + OUTREACH_CONTRACT_VERSION;
     const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
 
@@ -263,6 +264,7 @@ export async function POST(request: NextRequest) {
       }),
     );
   } catch (error) {
+    console.error("[office-roast] request failed", { code: error instanceof AiUsageError ? error.code : "generation-failed", message: error instanceof Error ? error.message.slice(0, 700) : "Unknown error" });
     if (error instanceof AiUsageError) return NextResponse.json({ error: error.message, code: error.code }, {
       status: error.status, headers: error.status === 429 ? { "Retry-After": "600" } : undefined,
     });

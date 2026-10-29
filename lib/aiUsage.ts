@@ -125,7 +125,7 @@ export async function reserveAiRun(actor: AiActor, url: string) {
       inputTokens += safe(payload.usage?.prompt_tokens);
       outputTokens += safe(payload.usage?.completion_tokens);
     },
-    async finish(status: "completed" | "failed", errorCode?: "provider-quota") {
+    async finish(status: "completed" | "failed", errorCode?: "provider-quota" | "outreach-contract" | "outreach-writer" | "outreach-review") {
       try {
         await ledger(`roast_ai_runs?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ status, error_code: errorCode || null, input_tokens: inputTokens, output_tokens: outputTokens, model_calls: calls, completed_at: new Date().toISOString() }) });
       } catch { console.error("[ai-usage] usage finalisation failed", { runId: id }); }

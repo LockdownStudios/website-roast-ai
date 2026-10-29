@@ -440,7 +440,7 @@ npm run test:reports
 
 
 
-Private Office scans now generate a distinct outreach mini-audit (cache suffix `outreach-v1`), not a paid full report. The analysis uses two settled homepage screenshots; the client PDF is text-only and follows the established branded report layout. It includes specific strengths, 3–5 evidence-backed observations and fixes, an honest refresh/remodel recommendation and sampling limitations. No heuristic score is displayed to the recipient. Public full-report generation and payment unlocking remain separate; checkout rejects mini-audits.
+Private Office scans now generate a distinct outreach mini-audit (cache suffix `outreach-v2`), not a paid full report. The analysis uses two settled homepage screenshots; the client PDF is text-only and follows the established branded report layout. It includes specific strengths, 1–5 evidence-backed observations and fixes, an honest refresh/remodel recommendation and sampling limitations. No heuristic score is displayed to the recipient. Public full-report generation and payment unlocking remain separate; checkout rejects mini-audits.
 
 
 
@@ -518,3 +518,5 @@ The diagnostic script no longer renders a deterministic fallback as though it we
 
 ### US$0.10 generation budget (29 October 2026)
 The default `ROAST_AI_MAX_RUN_USD` is now `0.10`. Terra requests count their actual text, images and response schema through OpenAI input-token preflight before each generation. Budgeting reserves cache-write input pricing, a 10% plus 1,024-token framing margin, and bounded output. At this ceiling the writer is limited to 2,400 output tokens; review remains mandatory. Requests that cannot fit stop without another generation, retry, provider fallback or evidence removal. Failed attempts may still incur the cost of an already completed writer. This is a per-run application safeguard, not an OpenAI account billing limit; taxes and hosting are separate. Earlier US$0.40 figures document the prior worst-case byte policy.
+
+Outreach v2 constrains generated field lengths, finding counts and screenshot indexes in the strict response schema to match server validation. Short reports still require a settled visual observation, a citation for every finding and a passed independent review. Full-report evidence requirements are unchanged. Writer/contract/review failures are recorded distinctly in the existing usage ledger and logged without storing raw model output; no new SQL is required.

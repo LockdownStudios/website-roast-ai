@@ -10,7 +10,7 @@ export function isClientReadyReport(roast: RoastResultPayload): boolean {
   return generation?.mode === "ai" && !generation.validationIssues?.length &&
     generation.review?.version === REPORT_REVIEW_VERSION && generation.review.passed === true &&
     generation.review.issues.length === 0 && Boolean(generation.review.checkedAt) &&
-    (roast.claim_contract?.length ?? 0) >= 3;
+    (roast.claim_contract?.length ?? 0) >= (roast.outreach ? roast.outreach.findings.length : 3);
 }
 
 export const INCOMPLETE_REPORT_MESSAGE = "This scan did not pass the evidence review. No client-ready report was created. Please try again; do not send an earlier draft to the client.";

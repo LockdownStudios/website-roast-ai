@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { reserveAiRun } from "../lib/aiUsage";
 import { estimateOpenAiRunUsd } from "../lib/aiCost";
-import { parseOutreach, resolveOutreachCitations } from "../lib/outreachContract";
+import { parseOutreach, resolveOutreachCitations, outreachResponseFormat } from "../lib/outreachContract";
+import { isClientReadyReport, REPORT_REVIEW_VERSION } from "../lib/reportQuality";
+import { readFileSync } from "node:fs";
+import type { RoastResultPayload } from "../lib/types";
 
 async function main() {
   const env = { ...process.env };
@@ -16,7 +19,21 @@ async function main() {
     assert.equal((resolved.findings[0] as { evidence: string }).evidence, "Exact site evidence");
     assert.equal(resolved.findings[0].pageUrl, image.sourceUrl);
     assert.throws(() => resolveOutreachCitations({ findings: [{ imageIndex: null, evidenceId: "e0", pageId: "p1" }] }, catalog, fixture.images), /different page/);
-    assert.throws(() => parseOutreach({ ...fixture, findings: [finding] }));
+    assert.equal(parseOutreach({ ...fixture, findings: [finding] }).findings.length, 1);
+    assert.throws(() => parseOutreach({ ...fixture, findings: [] }));
+    const schema = outreachResponseFormat.json_schema.schema;
+    assert.equal(schema.properties.findings.minItems, 1);
+    assert.equal(schema.properties.findings.maxItems, 5);
+    const observedPattern = new RegExp(schema.properties.findings.items.properties.observed.pattern);
+    assert.ok(observedPattern.test("x".repeat(180)));
+    assert.ok(!observedPattern.test("x".repeat(181)));
+    assert.deepEqual(schema.properties.findings.items.properties.imageIndex.enum, [null, 0, 1]);
+    const base = JSON.parse(readFileSync("fixtures/roast-report-sample.json", "utf8")).roast as RoastResultPayload;
+    const single: RoastResultPayload = { ...base, findings: undefined, outreach: parseOutreach({ ...fixture, findings: [finding] }), claim_contract: [{ claim: finding.observed, evidence: finding.evidence, source: "visual", severity: "medium" }], generation: { mode: "ai", review: { version: REPORT_REVIEW_VERSION, passed: true, issues: [], checkedAt: "2026-10-29T00:00:00Z" } } };
+    assert.equal(isClientReadyReport(single), true, "A concise, reviewed, image-grounded report need not invent three issues");
+    assert.equal(isClientReadyReport({ ...single, claim_contract: [] }), false);
+    assert.equal(isClientReadyReport({ ...single, generation: { mode: "ai", review: { ...single.generation!.review!, passed: false } } }), false);
+    assert.equal(isClientReadyReport({ ...single, outreach: undefined }), false, "Full-report evidence minimum is unchanged");
     assert.throws(() => parseOutreach({ ...fixture, findings: fixture.findings.map(f => ({ ...f, imageIndex: null })) }));
     assert.throws(() => parseOutreach({ ...fixture, images: [image] }));
     assert.throws(() => parseOutreach({ ...fixture, findings: fixture.findings.map(f => ({ ...f, observed: "x".repeat(181) })) }));
