@@ -648,9 +648,8 @@ async function analyzeViewport(
       interactionNotes,
     };
   } finally {
-    // Viewports now run sequentially, so closing this context cannot interrupt
-    // another viewport's rasterisation and releases its scripts/media promptly.
-    await context.close();
+    // Serverless Chromium can stall when its active context is disposed before
+    // the next one opens. Retain contexts until the owning browser closes.
     note("viewport-finished");
   }
 }
