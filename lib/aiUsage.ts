@@ -123,7 +123,13 @@ export async function reserveAiRun(actor: AiActor, url: string) {
       });
       if (visual && (outreach ? images !== 2 : images < 2 || images > 4)) throw new AiUsageError("ai-images-disabled", outreach ? "Outreach requires exactly two bounded screenshots." : "Visual reports require two homepage captures and at most two decision-page captures.", 503);
       if (!visual && serialized.includes('"type":"image_url"')) throw new AiUsageError("ai-images-disabled", "Image API inputs are disabled by the spending policy.", 503);
-      if (Buffer.byteLength(serialized, "utf8") > policy.inputBytes) throw new AiUsageError("ai-input-limit", "This evidence exceeds the AI input allowance; no additional model request was sent.", 422);
+      const inputBytes = Buffer.byteLength(serialized, "utf8");
+      const countedInput = policy.provider === "openai" && policy.model === "gpt-5.6-terra";
+      // Terra's complete prompt (schema and images included) is token-counted by
+      // requestAiCompletion before either generation call. The legacy byte
+      // estimate must not reject affordable evidence or the larger review prompt.
+      // Keep an independent transport bound; other models still use byte limits.
+      if (countedInput ? inputBytes > 2_000_000 : inputBytes > policy.inputBytes) throw new AiUsageError("ai-input-limit", countedInput ? "This scan exceeds the request-size safety bound. No additional model request was sent." : "This evidence exceeds the AI input allowance; no additional model request was sent.", 422);
       if (calls >= 2) throw new AiUsageError("ai-call-limit", "The report's AI request limit has been reached.");
       if ((stage === "writer" && calls !== 0) || (stage === "review" && calls !== 1)) throw new AiUsageError("ai-stage-limit", "Only one writer call followed by one review call is authorised.");
       calls++;

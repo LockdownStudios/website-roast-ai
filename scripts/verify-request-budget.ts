@@ -17,6 +17,10 @@ async function main() {
     assert.equal(writer.max_completion_tokens, 2400);
     assert.ok(JSON.stringify(sent).includes('"type":"input_image"'));
     assert.ok(JSON.stringify(sent).includes('"name":"report"'));
+    const large = request();
+    large.messages[0].content[0].text = "Complete website evidence ".repeat(5000);
+    await authorizeTerraBudget(large, "fake", 0.1, 0, "writer");
+    assert.ok(JSON.stringify(sent).includes("Complete website evidence ".repeat(5000)), "Token counting must include all large evidence, without truncation");
     const review = { ...request(), max_completion_tokens: 800 };
     await authorizeTerraBudget(review, "fake", 0.1, 0.045, "review");
     assert.equal(review.max_completion_tokens, 800);

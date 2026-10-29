@@ -21,7 +21,7 @@
     "test:ai-provider": "node --conditions react-server --import tsx scripts/verify-ai-provider.ts",
     "test:visual-readiness": "node --conditions react-server --import tsx scripts/verify-visual-readiness.ts",
     "test:crawl-selection": "node --conditions react-server --import tsx scripts/verify-crawl-selection.ts",
-    "ci": "npm run typecheck && npm run lint && npm run test:product-cta && npm run test:evidence-hardening && npm run test:refinements && npm run test:presentation && npm run test:compact-report && npm run test:technical && npm run test:outreach && npm run test:request-budget && npm run test:ai-usage && npm run test:evidence-packing && npm run test:ai-provider && npm run test:benchmark && npm run test:phase-one && npm run test:crawl && npm run test:crawl-selection && npm run test:profile && npm run test:claims && npm run test:quality && npm run test:journeys && npm run test:visual-readiness && npm run test:reports && npm audit --audit-level=high && npm run build",
+    "ci": "npm run typecheck && npm run lint && npm run test:product-cta && npm run test:evidence-hardening && npm run test:refinements && npm run test:presentation && npm run test:compact-report && npm run test:technical && npm run test:outreach && npm run test:request-budget && npm run test:input-preflight && npm run test:ai-usage && npm run test:evidence-packing && npm run test:ai-provider && npm run test:benchmark && npm run test:phase-one && npm run test:crawl && npm run test:crawl-selection && npm run test:profile && npm run test:claims && npm run test:quality && npm run test:journeys && npm run test:visual-readiness && npm run test:reports && npm audit --audit-level=high && npm run build",
     "test:outreach": "node --conditions react-server --import tsx scripts/verify-outreach.ts",
     "test:technical": "node --conditions react-server --import tsx scripts/verify-technical-audit.ts",
     "test:compact-report": "node --conditions react-server --import tsx scripts/verify-compact-report.ts",
@@ -29,7 +29,8 @@
     "test:evidence-hardening": "node --conditions react-server --import tsx scripts/verify-evidence-hardening.ts",
     "test:product-cta": "node --conditions react-server --import tsx scripts/verify-product-cta.ts",
     "test:request-budget": "node --conditions react-server --import tsx scripts/verify-request-budget.ts",
-    "test:presentation": "node --conditions react-server --import tsx scripts/verify-report-presentation.ts"
+    "test:presentation": "node --conditions react-server --import tsx scripts/verify-report-presentation.ts",
+    "test:input-preflight": "node --conditions react-server --import tsx scripts/verify-input-preflight.ts"
   },
   "dependencies": {
     "@sparticuz/chromium": "147.0.2",
