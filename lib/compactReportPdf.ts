@@ -8,7 +8,7 @@ export type CompactReport = {
   findings: Array<{ headline: string; observation: string; consequence?: string; fix: string; source?: string }>;
 };
 
-/** Two fixed pages, preflighted at readable sizes. Never silently clip or drop findings. */
+/** At most two pages, preflighted at readable sizes. Never clip or drop findings. */
 export function renderCompactReportPdf(report: CompactReport, draft = false): Promise<Buffer> {
   const clean = (text: string) => text.replace(/[\u2190-\u21ff]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/\s+/g, " ").trim();
   const page1: Block[] = [
@@ -19,7 +19,11 @@ export function renderCompactReportPdf(report: CompactReport, draft = false): Pr
   const groups: Block[][] = [];
   report.findings.forEach((finding, index) => {
     const group: Block[] = [{ kind: "box", title: `${index + 1}. ${finding.headline}`, text: [finding.observation, finding.consequence, finding.fix ? `The fix: ${finding.fix}` : ""].filter(Boolean).join(" ") }];
-    if (finding.source) group.push({ kind: "small", text: `Evidence page: ${finding.source}` });
+    if (finding.source) {
+      let source = finding.source;
+      try { const url = new URL(source); source = `${url.hostname}${url.pathname}`; } catch { /* Legacy display-only source. */ }
+      group.push({ kind: "small", text: `Evidence page: ${source}` });
+    }
     groups.push(group);
   });
   return new Promise((resolve, reject) => {
@@ -45,7 +49,10 @@ export function renderCompactReportPdf(report: CompactReport, draft = false): Pr
       return { rows, fits: y <= bottom };
     }
     let plans: ReturnType<typeof layout>[] = [];
+    const single = layout([...page1, { kind: "heading", text: "The Problems. The Fixes." }, ...groups.flat(), { kind: "heading", text: "The Verdict" }, { kind: "body", text: report.verdict }, { kind: "small", title: "Checks & coverage", text: [report.technical, report.coverage].filter(Boolean).join(" ") }], 151, 10.5);
+    if (single.fits) plans = [single];
     for (const font of [10.5, 10, 9.5]) {
+      if (plans.length) break;
       const candidates: Array<{ plans: ReturnType<typeof layout>[]; imbalance: number }> = [];
       for (let split = 0; split <= Math.min(2, groups.length - 1); split++) {
         const first: Block[] = [...page1, ...(split ? [{ kind: "heading" as const, text: "The Problems. The Fixes." }, ...groups.slice(0, split).flat()] : [])];
@@ -55,7 +62,7 @@ export function renderCompactReportPdf(report: CompactReport, draft = false): Pr
       }
       if (candidates.length) { candidates.sort((a, b) => a.imbalance - b.imbalance); plans = candidates[0].plans; break; }
     }
-    if (plans.length !== 2) { reject(new Error("Report exceeds the two-page editorial budget. Shorten the narrative; content was not clipped or omitted.")); doc.end(); return; }
+    if (!plans.length) { reject(new Error("Report exceeds the two-page editorial budget. Shorten the narrative; content was not clipped or omitted.")); doc.end(); return; }
     plans.forEach((plan, page) => {
       doc.addPage();
       doc.rect(0, 0, doc.page.width, doc.page.height).fill("#090d14");
@@ -81,7 +88,7 @@ export function renderCompactReportPdf(report: CompactReport, draft = false): Pr
         doc.rect(0, 0, doc.page.width, 24).fill("#f76b1c");
         doc.font("Helvetica-Bold").fontSize(8).fillColor("#070708").text("INTERNAL DRAFT - NOT APPROVED FOR CLIENTS", 42, 8, { width, height: 13, align: "center" });
       }
-      doc.font("Helvetica").fontSize(7).fillColor("#9aa5b7").text(`Lockdown Studios | ${draft ? "Internal draft" : "Website Roast"} | ${page + 1}/2`, 42, 789, { width, height: 10, lineBreak: false });
+      doc.font("Helvetica").fontSize(7).fillColor("#9aa5b7").text(`Lockdown Studios | ${draft ? "Internal draft" : "Website Roast"} | ${page + 1}/${plans.length}`, 42, 789, { width, height: 10, lineBreak: false });
     });
     doc.end();
   });

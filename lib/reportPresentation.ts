@@ -1,5 +1,18 @@
 import type { CompactReport } from "./compactReportPdf";
-import type { StoredRoastReport, TechnicalCheck } from "./types";
+import type { OutreachAudit, StoredRoastReport, TechnicalCheck } from "./types";
+
+export function outreachReportPresentation(audit: OutreachAudit, name?: string): CompactReport {
+  const url = audit.images[0].sourceUrl;
+  return {
+    name: name || new URL(url).hostname.replace(/^www\./, ""), url,
+    meta: "Website roast | visual, UX and technical evidence",
+    summary: audit.summary,
+    leak: `${audit.findings[0].observed} ${audit.findings[0].consequence}`,
+    strengths: audit.strengths, verdict: audit.recommendationReason,
+    coverage: audit.scope, technical: compactTechnicalSummary(audit.technicalChecks),
+    findings: audit.findings.map((f, index) => ({ headline: f.headline || `Finding ${index + 1}`, observation: f.observed, consequence: f.consequence, fix: f.fix, source: f.pageUrl })),
+  };
+}
 
 export function compactTechnicalSummary(checks?: TechnicalCheck[]) {
   if (!checks?.length) return "Technical measurements were not recorded for this saved report.";

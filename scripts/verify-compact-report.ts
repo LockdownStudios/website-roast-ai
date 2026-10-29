@@ -13,7 +13,9 @@ async function main() {
   const pdf = await renderCompactReportPdf(report, true);
   assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 2);
   assert.ok(!pdf.toString("latin1").includes("/Subtype /Image"), "No screenshots in client documents.");
+  const short = await renderCompactReportPdf({ ...report, findings: [report.findings[0]] });
+  assert.equal((short.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1, "Short reports should not force an empty second page");
   await assert.rejects(renderCompactReportPdf({ ...report, findings: [{ headline: "Too much copy", observation: "word ".repeat(5000), fix: "Edit the narrative." }] }), /two-page editorial budget/);
-  console.log("Compact report checks passed: exactly two pages, text-only PDF, overflow withheld without clipping. No paid calls.");
+  console.log("Compact report checks passed: one or two pages, text-only PDF, overflow withheld without clipping. No paid calls.");
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

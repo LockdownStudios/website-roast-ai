@@ -1,4 +1,4 @@
-import { fullReportPresentation, compactTechnicalSummary } from "./reportPresentation";
+import { fullReportPresentation, outreachReportPresentation } from "./reportPresentation";
 import { renderCompactReportPdf } from "./compactReportPdf";
 import { parseOutreach } from "./outreachContract";
 import "server-only";
@@ -741,19 +741,7 @@ function formatDate(value: string) {
 /** The roast remains the narrative; technical checks support it rather than becoming a checklist page. */
 export function renderBrandedOutreachPdf(value: OutreachAudit, draft = false, subject?: string): Promise<Buffer> {
   const audit = parseOutreach(value);
-  const url = audit.images[0].sourceUrl;
-  return renderCompactReportPdf({
-    name: subject || new URL(url).hostname.replace(/^www\./, ""), url,
-    meta: "Complimentary website roast | visual, UX and technical evidence",
-    summary: audit.summary, leak: `${audit.findings[0].observed} ${audit.findings[0].consequence}`,
-    strengths: audit.strengths, verdict: `${audit.recommendationReason}`,
-    coverage: audit.scope, technical: compactTechnicalSummary(audit.technicalChecks),
-    findings: audit.findings.map(f => ({ headline: f.headline || f.observed, observation: f.headline ? f.observed : "", consequence: f.consequence, fix: f.fix, source: compactSource(f.pageUrl) })),
-  }, draft);
-}
-
-function compactSource(url: string) {
-  try { const page = new URL(url); return `${page.hostname}${page.pathname}`; } catch { return url; }
+  return renderCompactReportPdf(outreachReportPresentation(audit, subject), draft);
 }
 
 function renderCompactFullReport(report: StoredRoastReport, draft: boolean) {
