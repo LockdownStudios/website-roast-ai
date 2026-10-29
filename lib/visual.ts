@@ -750,7 +750,7 @@ export async function analyzeVisualSignals(
             try {
               keyPages.push({
                 url: pageUrl,
-                desktop: await analyzeViewport(browser!, pageUrl, VIEWPORTS[0], captureScreenshot),
+                desktop: await analyzeViewport(mobileBrowser, pageUrl, VIEWPORTS[0], captureScreenshot),
               });
             } catch {
               // Optional key pages must not invalidate the required home views.
