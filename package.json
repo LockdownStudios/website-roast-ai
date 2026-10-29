@@ -31,7 +31,7 @@
     "test:request-budget": "node --conditions react-server --import tsx scripts/verify-request-budget.ts"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^153.0.0",
+    "@sparticuz/chromium": "147.0.2",
     "next": "^16.4.3",
     "pdfkit": "^0.20.1",
     "playwright": "^1.59.1",
