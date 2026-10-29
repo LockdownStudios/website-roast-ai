@@ -59,7 +59,7 @@ export function UrlInput({
   center = false,
   placeholder = "Enter your website URL...",
   buttonText = "Roast My Website",
-  microcopy = "No signup required. Instant results.",
+  microcopy = "No signup required. Scan time depends on the website.",
   className = "",
   variant,
   context = "hero",

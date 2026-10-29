@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { extractBearerToken } from "@/lib/auth";
-import { generateRoastWithUsage } from "@/lib/ai";
+import { generateOutreachAudit } from "@/lib/outreach";
+import { AiUsageError } from "@/lib/aiUsage";
+import { INCOMPLETE_REPORT_MESSAGE, isClientReadyReport } from "@/lib/reportQuality";
 import {
   createFreeTeaserAccess,
   createUnlockedAccess,
@@ -209,11 +211,11 @@ export async function POST(request: NextRequest) {
       visualAudit,
     };
     const scoring = scoreWebsite(scraped);
-    const scrapeHash = createScrapeHash(scraped);
+    const scrapeHash = createScrapeHash(scraped) + ":outreach-v1";
     const existing = await findRoastByUrlAndHash(normalizedUrl, scrapeHash);
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || request.nextUrl.origin;
 
-    if (existing) {
+    if (existing && isClientReadyReport(existing.roast)) {
       return NextResponse.json(
         toOfficePayload({
           report: existing,
@@ -223,7 +225,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const generation = await generateRoastWithUsage(scraped, scoring);
+    const generation = await generateOutreachAudit(scraped, scoring, { channel: "office" });
+    if (!isClientReadyReport(generation.roast)) {
+      console.error("[office-roast] report review failed", { url: normalizedUrl, generation: generation.roast.generation, error: generation.error });
+      return NextResponse.json({ error: INCOMPLETE_REPORT_MESSAGE, code: "roast-generation-incomplete" }, { status: 502 });
+    }
     const safeRoast = withReportContract(
       sanitizeRoastPayload(generation.roast, scraped, scoring),
     );
@@ -235,7 +241,7 @@ export async function POST(request: NextRequest) {
       id: crypto.randomUUID(),
       url: normalizedUrl,
       scrapeHash,
-      roast: withRoastAccess(safeRoast, createFreeTeaserAccess()),
+      roast: withRoastAccess(safeRoast, createUnlockedAccess(createFreeTeaserAccess(), "office")),
       scoring,
       scraped: persistedScraped,
       createdAt: new Date().toISOString(),
@@ -252,6 +258,9 @@ export async function POST(request: NextRequest) {
       }),
     );
   } catch (error) {
+    if (error instanceof AiUsageError) return NextResponse.json({ error: error.message, code: error.code }, {
+      status: error.status, headers: error.status === 429 ? { "Retry-After": "600" } : undefined,
+    });
     return NextResponse.json(
       {
         error:

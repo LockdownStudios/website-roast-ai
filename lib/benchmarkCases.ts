@@ -130,10 +130,10 @@ export const benchmarkCases: BenchmarkCase[] = [
   {
     id: "construction-keyword-stuffed-contact",
     label: "Construction site with SEO-stuffed headline and soft CTA",
-    expectedScoreRange: [4.8, 6.3],
-    expectedVisualDesignRange: [3.0, 4.5],
+    expectedScoreRange: [5.8, 6.5],
+    expectedVisualDesignRange: [8.0, 9.0],
     mustFlag: [],
-    mustPenalty: ["Keyword-Stuffed Headline", "Mismatched CTA Goal"],
+    mustPenalty: ["Keyword-Stuffed Headline"],
     scraped: buildScraped({
       url: "https://constructioncompany-pretoria.co.za/",
       title: "Construction Company Pretoria: Hire Pretoria Building Contractors",
@@ -192,13 +192,11 @@ export const benchmarkCases: BenchmarkCase[] = [
     id: "dated-construction-landscaping-services",
     label: "Dated construction and landscaping service page",
     expectedScoreRange: [5.0, 5.8],
-    expectedVisualDesignRange: [2.6, 3.2],
+    expectedVisualDesignRange: [4.8, 5.5],
     mustFlag: [],
     mustPenalty: [
-      "Mismatched CTA Goal",
-      "Weak Visual CTA",
-      "Low Visual Readability",
-      "Distracting Motion",
+      "Readability Heuristic Flag",
+      "Motion Heuristic Flag",
       "Visible Copy Quality Gap",
     ],
     scraped: buildScraped({

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import assert from "node:assert/strict";
 import path from "node:path";
 import { renderRoastReportPdf } from "../lib/reportPdf";
 import { sanitizeRoastPayload } from "../lib/reportSanitizer";
@@ -15,6 +16,17 @@ async function main() {
     unlockSource: "office" as const
   };
   const pdf = await renderRoastReportPdf(report, { access, isUnlocked: true });
+  const originalEnvironment = process.env.NODE_ENV;
+  try {
+    Object.assign(process.env, { NODE_ENV: "production" });
+    await assert.rejects(renderRoastReportPdf(report, { access, isUnlocked: true, internalDraftPreview: true }), /only in local development/);
+    Object.assign(process.env, { NODE_ENV: "development" });
+    const draft = await renderRoastReportPdf(report, { access, isUnlocked: true, internalDraftPreview: true });
+    assert.equal(draft.subarray(0, 4).toString("utf8"), "%PDF");
+  } finally {
+    if (originalEnvironment === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+    else Object.assign(process.env, { NODE_ENV: originalEnvironment });
+  }
   const sanitized = sanitizeRoastPayload(report.roast, report.scraped, report.scoring);
   const combinedReportText = [
     sanitized.first_impression,

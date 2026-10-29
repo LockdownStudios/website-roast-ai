@@ -21,6 +21,7 @@ import { GET as trackSummaryGet } from "@/lib/api-routes/track/summary/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type ApiMethod = "GET" | "POST";
 type ApiContext = { params: Promise<{ path: string[] }> };

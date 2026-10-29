@@ -4,6 +4,7 @@ import { getRoastAccess, isRoastUnlocked } from "@/lib/reportAccess";
 import { createPaystackReference, initializePaystackTransaction } from "@/lib/paystack";
 import { recordPaymentTransaction } from "@/lib/payments";
 import { getRoastResult } from "@/lib/store";
+import { isClientReadyReport, INCOMPLETE_REPORT_MESSAGE } from "@/lib/reportQuality";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Report not found." }, { status: 404 });
     }
 
+    if (report.roast.outreach) return NextResponse.json({ error: "Outreach mini-audits are complimentary and cannot be purchased as full reports." }, { status: 409 });
     const access = getRoastAccess(report.roast);
     if (isRoastUnlocked(report.roast)) {
       return NextResponse.json({
@@ -58,6 +60,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!isClientReadyReport(report.roast)) {
+      return NextResponse.json({ error: INCOMPLETE_REPORT_MESSAGE, code: "report-not-client-ready" }, { status: 409 });
+    }
     const token = extractBearerToken(request.headers.get("authorization"));
     const user = token ? await getSupabaseUserFromAccessToken(token) : null;
     if (token && !user) {

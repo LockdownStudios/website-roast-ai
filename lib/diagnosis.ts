@@ -76,6 +76,38 @@ const PAIN_POINT_LABELS: Record<RoastPainPoint, string> = {
   unclear_buyer_fit: "Unclear buyer fit",
 };
 
+export function parseBusinessDiagnosis(value: unknown): RoastDiagnosis | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as RoastDiagnosis;
+  const own = (map: object, key: unknown) => typeof key === "string" && Object.hasOwn(map, key);
+  if (!own(BUSINESS_MODEL_LABELS, raw.businessModel) || !own(SITE_GOAL_LABELS, raw.siteGoal) ||
+    !Array.isArray(raw.buyerAnxieties) || !raw.buyerAnxieties.every(item => own(BUYER_ANXIETY_LABELS, item)) ||
+    !Array.isArray(raw.primaryPainpoints) || !raw.primaryPainpoints.every(item => own(PAIN_POINT_LABELS, item)) ||
+    typeof raw.summary !== "string" || !raw.summary.trim() ||
+    !Array.isArray(raw.evidence) || !raw.evidence.length || !raw.evidence.every(item => typeof item === "string" && item.trim()) ||
+    !["high", "medium", "low"].includes(raw.confidence)) return null;
+  return { businessModel: raw.businessModel, siteGoal: raw.siteGoal, buyerAnxieties: raw.buyerAnxieties.slice(0, 8),
+    primaryPainpoints: raw.primaryPainpoints.slice(0, 5), summary: raw.summary.slice(0, 1200),
+    evidence: raw.evidence.slice(0, 12).map(item => item.slice(0, 500)), confidence: raw.confidence };
+}
+
+export function businessDiagnosisVocabulary() {
+  return { businessModel: Object.keys(BUSINESS_MODEL_LABELS).join("|"), siteGoal: Object.keys(SITE_GOAL_LABELS).join("|"),
+    buyerAnxieties: [`choose values from: ${Object.keys(BUYER_ANXIETY_LABELS).join("|")}`],
+    primaryPainpoints: [`choose values from: ${Object.keys(PAIN_POINT_LABELS).join("|")}`] };
+}
+
+export function businessDiagnosisSchema() {
+  return { type: "object", additionalProperties: false, properties: {
+    businessModel: { type: "string", enum: Object.keys(BUSINESS_MODEL_LABELS) },
+    siteGoal: { type: "string", enum: Object.keys(SITE_GOAL_LABELS) },
+    buyerAnxieties: { type: "array", items: { type: "string", enum: Object.keys(BUYER_ANXIETY_LABELS) } },
+    primaryPainpoints: { type: "array", items: { type: "string", enum: Object.keys(PAIN_POINT_LABELS) } },
+    summary: { type: "string" }, evidence: { type: "array", items: { type: "string" } },
+    confidence: { type: "string", enum: ["high", "medium", "low"] }
+  }, required: ["businessModel", "siteGoal", "buyerAnxieties", "primaryPainpoints", "summary", "evidence", "confidence"] };
+}
+
 export function diagnoseWebsite(
   scraped: ScrapedWebsiteData,
   scoring: WebsiteScoring,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { getAccessToken, getStoredAuthUser } from "@/lib/clientAuth";
 
@@ -9,18 +9,19 @@ type UnlockFullReportProps = {
   priceZar: number;
 };
 
+function subscribeToAuth(notify: () => void) {
+  window.addEventListener("storage", notify);
+  return () => window.removeEventListener("storage", notify);
+}
+
 export function UnlockFullReport({ reportId, priceZar }: UnlockFullReportProps) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const storedEmail = useSyncExternalStore(subscribeToAuth, () => getStoredAuthUser()?.email || "", () => "");
+  const [editedEmail, setEmail] = useState<string | null>(null);
+  const email = editedEmail ?? storedEmail;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const stored = getStoredAuthUser();
-    if (stored?.email) {
-      setEmail(stored.email);
-    }
-  }, []);
 
   async function onUnlockWithPaystack() {
     setIsLoading(true);

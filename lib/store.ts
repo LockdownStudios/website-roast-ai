@@ -1,3 +1,6 @@
+import { parsePairedFindings } from "./pairedFindings";
+import { normalizeTechnicalChecks } from "./technicalAudit";
+import { parseOutreach } from "./outreachContract";
 import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -239,6 +242,7 @@ function normalizeCrawl(
         : "single_page";
 
   return {
+    aliases: Array.isArray(raw.aliases) ? raw.aliases.filter(alias => alias && typeof alias.url === "string" && typeof alias.canonicalUrl === "string").slice(0, 50) : undefined,
     strategy,
     pageCount: clampInteger(raw.pageCount ?? visitedUrls.length, 1, 10),
     visitedUrls,
@@ -495,6 +499,10 @@ function normalizeVisualViewport(
       typeof raw.screenshotHash === "string" && /^[a-f0-9]{64}$/i.test(raw.screenshotHash)
         ? raw.screenshotHash.toLowerCase()
         : undefined,
+    interactionNotes: normalizeStringList(raw.interactionNotes).slice(0, 8),
+    captureReadiness: raw.captureReadiness && typeof raw.captureReadiness.settled === "boolean"
+      ? { settled: raw.captureReadiness.settled, waitedMs: clampInteger(raw.captureReadiness.waitedMs, 0, 30000), reasons: normalizeStringList(raw.captureReadiness.reasons).slice(0, 8) }
+      : undefined,
   };
 }
 
@@ -520,9 +528,9 @@ function normalizeVisualAudit(value: unknown): VisualAudit | undefined {
   }
 
   const raw = value as Partial<VisualAudit>;
-  const available = Boolean(raw.available);
   const desktop = normalizeVisualViewport(raw.desktop, "desktop");
   const mobile = normalizeVisualViewport(raw.mobile, "mobile");
+  const available = Boolean(raw.available) && desktop?.captureReadiness?.settled !== false && mobile?.captureReadiness?.settled !== false;
 
   return {
     available,
@@ -579,6 +587,7 @@ function normalizeScraped(
   const crawl = normalizeCrawl(value.crawl, normalizedUrl);
 
   const normalized: ScrapedWebsiteData = {
+    technicalChecks: normalizeTechnicalChecks(value.technicalChecks),
     url: normalizedUrl,
     title:
       typeof value.title === "string" && value.title.trim()
@@ -879,6 +888,9 @@ function normalizeRoast(roast: unknown): RoastResultPayload | null {
       evidence.length > 0
         ? evidence
         : ["No detailed evidence captured in this report version."],
+    findings: value.findings ? parsePairedFindings(value.findings) : undefined,
+    technicalChecks: normalizeTechnicalChecks(value.technicalChecks),
+    outreach: value.outreach ? parseOutreach(value.outreach) : undefined,
     claim_contract: claimContract.length > 0 ? claimContract : undefined,
     generation,
     access: normalizeRoastAccess(value.access),
@@ -912,6 +924,10 @@ function normalizeGenerationMetadata(
         : undefined,
     reason,
     validationIssues: normalizeStringList(raw.validationIssues).slice(0, 20),
+    review: raw.review && typeof raw.review.version === "string" && typeof raw.review.passed === "boolean" &&
+      typeof raw.review.checkedAt === "string" && Array.isArray(raw.review.issues) && raw.review.issues.every(issue => typeof issue === "string")
+      ? { version: raw.review.version, passed: raw.review.passed, checkedAt: raw.review.checkedAt, issues: raw.review.issues.slice(0, 12) }
+      : undefined,
   };
 }
 

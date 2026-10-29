@@ -1,3 +1,6 @@
+import { browserLaunchOptions } from "./browserRuntime";
+import { pageUrlKey, deduplicatePages } from "./pageAliases";
+import { technicalChecksFromHtml } from "./technicalAudit";
 import type {
   CrawlDiscoverySource,
   CrawlFailure,
@@ -28,6 +31,10 @@ const MAX_PAGE_EVIDENCE_CHARS = 1200;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 const CTA_PHRASES = [
+  "kontak ons",
+  "bespreek",
+  "beskikbaarheid",
+  "beskrywing",
   "contact us",
   "contact",
   "get quote",
@@ -76,6 +83,10 @@ const CTA_PHRASES = [
 ];
 
 const TRUST_PHRASES = [
+  "wat ons gaste sê",
+  "wat ons gaste se",
+  "getuigskrifte",
+  "gaste resensies",
   "testimonials",
   "testimonial",
   "trusted by",
@@ -322,33 +333,25 @@ function toAbsoluteUrl(baseUrl: string, href: string): string | null {
   }
 }
 
-function urlKey(value: string): string {
-  try {
-    const parsed = new URL(value);
-    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
-    return `${parsed.origin}${pathname}${parsed.search}`.toLowerCase();
-  } catch {
-    return value.toLowerCase();
-  }
-}
+function urlKey(value: string): string { return pageUrlKey(value); }
 
 function classifyPageRole(url: string): CrawlPageRole {
   const lower = url.toLowerCase();
   try {
     const parsed = new URL(url);
-    if ((parsed.pathname.replace(/\/+$/, "") || "/") === "/") {
+    if (["/", "/home"].includes(parsed.pathname.replace(/\/+$/, "") || "/")) {
       return "home";
     }
   } catch {
     // Continue with pattern-based classification.
   }
-  if (/(^|\/)(contact|contact-us|contactus)(\/|$)|#contact/.test(lower)) {
+  if (/(^|\/)(contact|contact-us|contactus|kontak-ons|find-a-dealer)(\/|$)|#contact/.test(lower)) {
     return "contact";
   }
   if (/(^|\/)(about|about-us|team|company|who-we-are)(\/|$)/.test(lower)) {
     return "about";
   }
-  if (/(^|\/)(services|solutions|what-we-do|service-areas|products)(\/|$)/.test(lower)) {
+  if (/(^|\/)(services|solutions|what-we-do|service-areas|products|product|rooms|shop|accommodation|akkommodasie|menu)(\/|$)/.test(lower)) {
     return "services";
   }
   if (/(^|\/)(pricing|plans|packages|quote|request-quote)(\/|$)/.test(lower)) {
@@ -378,6 +381,8 @@ function linkPriorityScore(url: string): number {
   if (/(testimonials|reviews|clients)/.test(lower)) score += 6;
   if (/(faq|process|how-it-works)/.test(lower)) score += 5;
   if (/(service-area|areas-we-serve|locations)/.test(lower)) score += 4;
+  if (/(^|\/)(product|rooms|shop|accommodation|akkommodasie|menu|find-a-dealer|kontak-ons)(\/|$)/.test(lower)) score += 10;
+  if (/(^|\/)home(\/|$)/.test(lower)) score += 8;
   if (/(blog|news|press|privacy|terms|cookie|careers|jobs|legal)/.test(lower)) score -= 8;
 
   const slashCount = (lower.match(/\//g) ?? []).length;
@@ -432,7 +437,8 @@ function rankInternalCandidatePages(
     )
       ? 3
       : 0;
-    const priority = linkPriorityScore(parsed.toString()) + intentBoost;
+    const actionBoost = /\b(find (?:a |your )?dealer|make a booking|book now|check availability|request a quote|bespreek)\b/.test(anchorText) ? 20 : 0;
+    const priority = linkPriorityScore(parsed.toString()) + intentBoost + actionBoost;
     if (priority <= 0) {
       continue;
     }
@@ -591,7 +597,8 @@ function mergeCandidatePages(...groups: CandidatePage[][]): CandidatePage[] {
   for (const candidate of groups.flat()) {
     const key = urlKey(candidate.url);
     const existing = bestByUrl.get(key);
-    if (!existing || candidate.score > existing.score) {
+    if (!existing || (candidate.discoveredFrom === "navigation" && existing.discoveredFrom !== "navigation") ||
+      (candidate.discoveredFrom === existing.discoveredFrom && candidate.score > existing.score)) {
       bestByUrl.set(key, candidate);
     }
   }
@@ -601,17 +608,27 @@ function mergeCandidatePages(...groups: CandidatePage[][]): CandidatePage[] {
     .slice(0, MAX_DISCOVERED_PAGES);
 }
 
-function selectRepresentativeCandidates(
+export function selectRepresentativeCandidates(
   candidates: CandidatePage[],
   limit: number,
   excludedKeys: Set<string> = new Set(),
+  entryUrl?: string,
 ): CandidatePage[] {
   if (limit <= 0) return [];
 
-  const available = candidates.filter((candidate) => !excludedKeys.has(urlKey(candidate.url)));
+  const candidateRank = (candidate: CandidatePage) => candidate.score
+    + (candidate.discoveredFrom === "navigation" ? 20 : 0)
+    - (/\/(?:elements|demos?|sample-page|test)(?:\/|$)/i.test(new URL(candidate.url).pathname) && candidate.discoveredFrom === "sitemap" ? 40 : 0);
+  const localePrefix = (url: string) => new URL(url).pathname.match(/^\/([a-z]{2}(?:-[a-z]{2})?)(?:\/|$)/i)?.[1]?.toLowerCase() || "";
+  const entryLocale = entryUrl ? localePrefix(entryUrl) : "";
+  const available = candidates.filter((candidate) => !excludedKeys.has(urlKey(candidate.url)))
+    .filter(candidate => !/\/(?:cart|checkout|my-account|account|track-order|order-tracking|wp-login\.php)(?:\/|$)/i.test(new URL(candidate.url).pathname))
+    .filter(candidate => !entryUrl || localePrefix(candidate.url) === entryLocale)
+    .sort((a, b) => candidateRank(b) - candidateRank(a));
   const selected: CandidatePage[] = [];
   const selectedKeys = new Set<string>();
   const preferredRoles: CrawlPageRole[] = [
+    "home",
     "services",
     "pricing",
     "contact",
@@ -623,7 +640,7 @@ function selectRepresentativeCandidates(
   ];
 
   for (const role of preferredRoles) {
-    const match = available.find((candidate) => candidate.role === role);
+    const match = available.find((candidate) => candidate.role === role && candidateRank(candidate) >= 0);
     if (!match) continue;
     selected.push(match);
     selectedKeys.add(urlKey(match.url));
@@ -758,12 +775,13 @@ function isLikelyCtaAnchorText(text: string): boolean {
   if (isBoilerplateLine(text)) {
     return false;
   }
-  if (isLikelyMenuLine(text) && !/(book|quote|call|consult|demo|apply|contact|shop|cart|checkout|buy|product)/i.test(lower)) {
+  if (isLikelyMenuLine(text) && !/(book|quote|call|consult|demo|apply|contact|shop|cart|checkout|buy|product|menu|dealer|location|directions|bespreek|beskikbaarheid|kontak|beskrywing)/i.test(lower)) {
     return false;
   }
 
   return (
     CTA_PHRASES.some((phrase) => lower.includes(phrase)) ||
+    /\b(find a dealer|find your dealer|find a location|our locations|get directions|make a booking|bespreek|beskikbaarheid|classic menu|breakfast menu|dinner menu)\b/.test(lower) ||
     /\b(book|schedule|quote|call|consult|demo|trial|apply|get started|sign up|contact|talk|speak|shop|cart|checkout|buy|order|product menu|shop our products|view product range|explore services|view services|check availability|book direct|reserve a table|make a reservation|view menu)\b/.test(
       lower,
     )
@@ -772,6 +790,10 @@ function isLikelyCtaAnchorText(text: string): boolean {
 
 function ctaPriority(signal: string): number {
   const lower = signal.toLowerCase();
+
+  if (/\b(book now|make a booking|check availability|book direct|reserve a table|make a reservation|find a dealer|find your dealer|find a location|our locations|get directions|view menu|classic menu|bespreek|beskikbaarheid)\b/.test(lower)) {
+    return 98;
+  }
 
   if (/\b(book|schedule)\b.*\b(consultation|call|appointment|conversation|demo)\b/.test(lower)) {
     return 105;
@@ -794,7 +816,7 @@ function ctaPriority(signal: string): number {
   if (/\b(learn more|view now|view|explore|discover|read more)\b/.test(lower)) {
     return 36;
   }
-  if (/\b(contact us|contact)\b/.test(lower)) {
+  if (/\b(contact us|contact|kontak ons|beskrywing)\b/.test(lower)) {
     return 18;
   }
 
@@ -1210,10 +1232,7 @@ async function renderHtmlWithBrowser(url: string): Promise<string | null> {
   let browser: BrowserLike | null = null;
 
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-dev-shm-usage"],
-    });
+    browser = await chromium.launch(await browserLaunchOptions());
 
     const context = await browser.newContext({
       viewport: { width: 1365, height: 900 },
@@ -1407,7 +1426,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
   );
   const additionalPages: PageExtractResult[] = [];
   const failures: CrawlFailure[] = [];
-  const attemptedKeys = new Set<string>();
+  const attemptedKeys = new Set<string>([urlKey(homepage.pageUrl)]);
 
   const fetchCandidates = async (selected: CandidatePage[]) => {
     for (const candidate of selected) attemptedKeys.add(urlKey(candidate.url));
@@ -1433,6 +1452,8 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
   const firstSelection = selectRepresentativeCandidates(
     initialCandidates,
     Math.min(INITIAL_ADDITIONAL_PAGE_COUNT, MAX_ADDITIONAL_PAGES),
+    attemptedKeys,
+    url,
   );
   await fetchCandidates(firstSelection);
 
@@ -1444,6 +1465,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     expandedCandidates,
     MAX_ADDITIONAL_PAGES - firstSelection.length,
     attemptedKeys,
+    url,
   );
   await fetchCandidates(secondSelection);
 
@@ -1462,7 +1484,8 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     .map((candidate) => candidate.url)
     .slice(0, 30);
 
-  const pages = [homepage, ...additionalPages].slice(0, MAX_TOTAL_PAGES);
+  const deduplicated = deduplicatePages([homepage, ...additionalPages], page => ({ url: page.pageUrl, title: page.title, content: page.content }));
+  const pages = deduplicated.pages.slice(0, MAX_TOTAL_PAGES);
   const pageSummaries = pages.map(toCrawlPageSummary);
 
   if (pages.length === 0) {
@@ -1544,6 +1567,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
   });
 
   const scraped: ScrapedWebsiteData = {
+    technicalChecks: technicalChecksFromHtml(pages.map(page => ({ url: page.pageUrl, html: page.html }))),
     url,
     title,
     description,
@@ -1556,6 +1580,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedWebsiteData> {
     genericPhrasesFound,
     visualHints,
     crawl: {
+      aliases: deduplicated.aliases,
       strategy: crawlStrategy,
       pageCount: pages.length,
       visitedUrls: pages.map((page) => page.pageUrl),

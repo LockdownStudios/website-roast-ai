@@ -69,6 +69,8 @@ export default function MyReportsPage() {
   }
 
   useEffect(() => {
+    // Synchronise the report list with the browser auth session and remote API on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadReports();
   }, []);
 

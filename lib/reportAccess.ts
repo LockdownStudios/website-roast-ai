@@ -95,6 +95,8 @@ export function buildTeaserRoast(roast: RoastResultPayload): RoastResultPayload 
   const teaserMistakes = roast.mistakes.slice(0, 3);
   return {
     ...roast,
+    technicalChecks: undefined,
+    findings: undefined,
     mistakes: teaserMistakes.length > 0 ? teaserMistakes : roast.mistakes,
     lost_customers:
       "Unlock the full report to see the detailed leakage analysis and buyer drop-off reasoning.",

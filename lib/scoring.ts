@@ -8,9 +8,9 @@ import {
   sumBreakdown,
 } from "./scoringConfig";
 import { ROAST_ENGINE_VERSION } from "./fingerprint";
-import { buildSiteContextSnapshot } from "./siteContext";
 import { scoreVisualDesign } from "./designScoring";
 import { scoreVisualAudit } from "./visualScoring";
+import { buildAuditContext } from "./auditContext";
 import type {
   ScoreAdjustment,
   ScoreBreakdown,
@@ -60,6 +60,15 @@ type CtaGoal = "commerce" | "quote" | "booking" | "consultation" | "download" | 
 function classifyCtaSignal(signal: string): "strong" | "weak" | "none" {
   const lower = signal.toLowerCase();
 
+  const goals: CtaGoal[] = ["commerce", "quote", "booking", "consultation", "download", "demo"];
+  if (
+    /\b(find (?:a |your )?(?:dealer|location|cafe)|make a booking|bespreek|beskikbaarheid)\b/.test(lower) ||
+    goals.some((goal) => ctaMatchesGoal(signal, goal)) ||
+    /\bdiscuss\s+(?:(?:your|a|an|our|the)\s+)?(?:website|app|game|project|brief|visual production|automation)\b/.test(lower)
+  ) {
+    return "strong";
+  }
+
   if (
     /\b(get (a )?quote|request (a )?quote|book|schedule|start|sign up|apply|trial|buy now|shop now|shop our products|view product range|call now|call us|request demo|book a demo|consultation)\b/.test(
       lower,
@@ -69,7 +78,7 @@ function classifyCtaSignal(signal: string): "strong" | "weak" | "none" {
   }
 
   if (
-    /\b(contact|learn more|view|explore|send message|chat|discover|read more|about)\b/.test(
+    /\b(contact|kontak ons|beskrywing|learn more|view|explore|send message|chat|discover|read more|about)\b/.test(
       lower,
     )
   ) {
@@ -107,54 +116,12 @@ function keywordStuffedHeadline(headline: string): boolean {
 }
 
 function pageHasOverloadedHeadline(scrapedData: ScrapedWebsiteData): boolean {
-  return scrapedData.headings.h1.some(headlineTooLong);
+  const entry = scrapedData.crawl?.pages.find(page => page.url === scrapedData.url);
+  return entry ? headlineTooLong(entry.primaryHeading || "") : scrapedData.headings.h1.some(headlineTooLong);
 }
 
 function pageHasKeywordStuffedHeadline(scrapedData: ScrapedWebsiteData): boolean {
   return scrapedData.headings.h1.some(keywordStuffedHeadline);
-}
-
-function expectedCtaGoal(niche: string): CtaGoal | null {
-  switch (niche) {
-    case "ecommerce":
-      return "commerce";
-    case "local_service":
-      return "quote";
-    case "professional_service":
-      return "consultation";
-    case "healthcare":
-    case "hospitality":
-      return "booking";
-    case "mobile_game":
-      return "download";
-    case "saas":
-      return "demo";
-    default:
-      return null;
-  }
-}
-
-function expectedCtaLabel(niche: string): string {
-  switch (niche) {
-    case "local_service":
-      return "Request a Quote";
-    case "professional_service":
-      return "Book a Consultation";
-    case "healthcare":
-      return "Book an Appointment";
-    case "hospitality":
-      return "Check Availability";
-    case "creative_agency":
-      return "Book a Discovery Call";
-    case "mobile_game":
-      return "Download the App";
-    case "saas":
-      return "Book a Demo";
-    case "ecommerce":
-      return "View Product Range";
-    default:
-      return "Book a Consultation";
-  }
 }
 
 function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
@@ -175,11 +142,6 @@ function ctaMatchesGoal(signal: string, goal: CtaGoal): boolean {
     default:
       return false;
   }
-}
-
-function hasGoalLedCta(ctas: string[], niche: string): boolean {
-  const goal = expectedCtaGoal(niche);
-  return Boolean(goal && ctas.some((cta) => ctaMatchesGoal(cta, goal)));
 }
 
 function hasAny(text: string, words: string[]): boolean {
@@ -208,7 +170,8 @@ function hasMeaningfulH1(h1List: string[]): boolean {
 }
 
 function hasNumericProof(text: string): boolean {
-  return /\b\d{2,}\+?\b|%|since\s+\d{4}|in\s+\d+\s*(days|weeks|hours|minutes|months)\b/i.test(
+  if (/\b\d(?:\.\d)?\s*\/\s*5\b|\b\d[\d,]*\+?\s*(reviews|runners|teams)\b|\b\d+-day returns\b/i.test(text)) return true;
+  return /\d+(?:\.\d+)?\s*%|\bsince\s+\d{4}\b|\b\d+\+?\s*(years|clients|customers|projects|locations|branches|rooms|guests)\b|\b(?:in|within)\s+\d+\s*(days|weeks|hours|minutes|months)\b|(?:R|ZAR|USD|GBP|EUR|\$)\s*\d+[\d,.]*\b/i.test(
     text,
   );
 }
@@ -453,7 +416,7 @@ function leakFromWeakestCategory(
     return "The page asks for the wrong next step, so buyer intent cools down.";
   }
 
-  if (penaltyLabels.has("No Trust Proof") && penaltyLabels.has("No Contact Path")) {
+  if (penaltyLabels.has("Trust Proof Not Observed") && penaltyLabels.has("No Contact Path")) {
     return "You ask people to trust you, but you give them nothing to believe.";
   }
 
@@ -513,6 +476,7 @@ function buildEvidence(
 }
 
 export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
+  const audit = buildAuditContext(scrapedData);
   const titleText = scrapedData.title.trim();
   const descriptionText = scrapedData.description.trim();
   const headingCount = scrapedData.headings.h1.length + scrapedData.headings.h2.length;
@@ -542,25 +506,22 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   const numericProof = hasNumericProof(combinedText);
   const legalCue = hasAny(combinedLower, LEGAL_TRUST_WORDS);
   const uniqueLongTerms = countUniqueLongTerms(scrapedData.content);
-  const siteContext = buildSiteContextSnapshot(scrapedData);
   const overloadedHeadline = pageHasOverloadedHeadline(scrapedData);
   const stuffedHeadline = pageHasKeywordStuffedHeadline(scrapedData);
   const headlineWorksForClarity = meaningfulH1 && !overloadedHeadline && !stuffedHeadline;
 
   const trustSignalCount = scrapedData.trustSignals.length;
   const contactSignalCount = scrapedData.contactSignals.length;
-  const strongCtaCount = scrapedData.ctas.filter(
+  const strongCtaCount = audit.actionLabels.filter(
     (cta) => classifyCtaSignal(cta) === "strong",
   ).length;
-  const weakCtaCount = scrapedData.ctas.filter(
+  const weakCtaCount = audit.actionLabels.filter(
     (cta) => classifyCtaSignal(cta) === "weak",
   ).length;
   const ctaCount = strongCtaCount + weakCtaCount;
   const genericCount = scrapedData.genericPhrasesFound.length;
-  const ctaGoalMismatch =
-    Boolean(expectedCtaGoal(siteContext.niche)) &&
-    !hasGoalLedCta(scrapedData.ctas, siteContext.niche) &&
-    (weakCtaCount > 0 || strongCtaCount === 0);
+  const hasObservedContactPath = audit.journeys.some(journey =>
+    ["contact", "call", "apply", "find_dealer", "reserve_table", "book_stay"].includes(journey.intent) && journey.status !== "unclear");
 
   const clarity = scoreClarity({
     titleExists,
@@ -654,32 +615,23 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
       penalties,
       "No CTA Path",
       8,
-      "No strong CTA means visitors can read and leave without acting.",
+      "No recognised CTA label was found in the captured evidence; this is a detection gap, not proof that no customer action exists.",
     );
-  } else if (strongCtaCount === 0 && weakCtaCount > 0) {
+  } else if (strongCtaCount === 0 && weakCtaCount > 0 && !hasObservedContactPath) {
     addAdjustment(
       penalties,
       "Weak CTA Path",
       3,
-      "CTA exists but is soft; next action is not compelling enough.",
-    );
-  }
-
-  if (ctaGoalMismatch) {
-    addAdjustment(
-      penalties,
-      "Mismatched CTA Goal",
-      6,
-      `The CTA path is too generic for ${siteContext.nicheLabel.toLowerCase()} traffic; the page should drive "${expectedCtaLabel(siteContext.niche)}".`,
+      "Detected CTA labels are generic; no specific action wording was recognised. This does not establish whether the destination or form works.",
     );
   }
 
   if (trustSignalCount === 0) {
     addAdjustment(
       penalties,
-      "No Trust Proof",
+      "Trust Proof Not Observed",
       7,
-      "No testimonials/reviews/case studies detected in visible copy.",
+      "No recognised testimonials, reviews or case-study signals were extracted. Other proof or uncaptured pages may exist.",
     );
   }
 
@@ -688,7 +640,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
       penalties,
       "No Contact Path",
       4,
-      "No obvious contact method detected in key visible text.",
+      "No recognised contact method was extracted; this does not establish that the site has none.",
     );
   }
 
@@ -728,12 +680,12 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     );
   }
 
-  if (numericProof && ctaCount >= 2) {
+  if (numericProof && ctaCount >= 2 && strongCtaCount > 0) {
     addAdjustment(
       bonuses,
       "Quantified Offer + CTA",
       3,
-      "Clear quantifiable messaging plus CTA stack improves conversion confidence.",
+      "Numeric messaging and specific action wording were detected. This bonus assesses visible copy, not a tested enquiry or checkout flow.",
     );
   }
 
@@ -746,12 +698,13 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     );
   }
 
-  if (scrapedData.visualHints.aboveFoldCtaLikely && scrapedData.visualHints.formAboveFoldLikely) {
+  const capturedAction = [scrapedData.visualAudit?.desktop, scrapedData.visualAudit?.mobile].some(view => view?.captureReadiness?.settled && view.primaryCtaAboveFold && !!view.primaryCtaText);
+  if (capturedAction || (!scrapedData.visualAudit?.available && scrapedData.visualHints.aboveFoldCtaLikely && scrapedData.visualHints.formAboveFoldLikely)) {
     addAdjustment(
       bonuses,
       "Above-Fold Action Path",
       2,
-      "Likely above-fold CTA and form reduce friction to action.",
+      capturedAction ? "A settled viewport contains a visible primary CTA. No above-fold form or completed enquiry was established." : "Heuristic action-layout signals were detected. This does not establish a visible form or a completed enquiry flow.",
     );
   }
 
@@ -788,10 +741,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
   const baseRaw = sumBreakdown(breakdown);
   const preliminaryRaw = clampToRange(baseRaw - penaltyTotal + bonusTotal, 0, 100);
   const rawCaps: number[] = [];
-  if (stuffedHeadline && ctaGoalMismatch) rawCaps.push(60);
-  else if (stuffedHeadline) rawCaps.push(68);
-  if (ctaGoalMismatch && trustSignalCount <= 1) rawCaps.push(66);
-  if (ctaGoalMismatch && strongCtaCount === 0) rawCaps.push(68);
+  if (stuffedHeadline) rawCaps.push(68);
   const visualSummary = scrapedData.visualAudit?.summary;
   if (visualSummary) {
     if (visualSummary.readability < 35 && visualSummary.ctaProminence < 45) {
@@ -799,21 +749,15 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     } else if (visualSummary.readability < 35) {
       rawCaps.push(62);
     }
-    if (visualSummary.ctaProminence < 35 && ctaGoalMismatch) {
-      rawCaps.push(57);
-    }
     if (visualSummary.motionDistraction > 60 && visualSummary.readability < 50) {
       rawCaps.push(60);
     }
-  }
-  if (ctaGoalMismatch && strongCtaCount === 0 && trustSignalCount <= 1) {
-    rawCaps.push(58);
   }
   const cappedRaw = rawCaps.length > 0 ? Math.min(preliminaryRaw, ...rawCaps) : preliminaryRaw;
   const rawScore = roundToOne(clampToRange(cappedRaw, 0, 100));
   const score = scoreOutOf10FromRaw(rawScore);
 
-  const confidence = computeConfidence({
+  const baseConfidence = computeConfidence({
     titleExists,
     descriptionExists,
     headingCount,
@@ -827,6 +771,8 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     buttonCount: scrapedData.visualHints.buttonCount,
     linkCount: scrapedData.visualHints.linkCount,
   });
+  const confidence = Math.max(20, baseConfidence - (audit.scope.sampled ? 8 : 0) -
+    (audit.scope.staticPages.length ? 8 : 0) - (!scrapedData.visualAudit?.available ? 10 : 0));
 
   const findings = toFindings(
     {
@@ -844,9 +790,9 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
     penalties,
   );
   findings.push(
-    `Site profile detected: ${siteContext.nicheLabel}. Offer snapshot: ${siteContext.offerHeadline}.`,
+    `Observed business evidence: ${audit.profile.summary}`,
   );
-  findings.push(`Primary CTA snapshot: ${siteContext.primaryCta}.`);
+  findings.push(`Observed actions: ${audit.actionLabels.slice(0, 8).join(" | ") || "not established"}. Presence is not a completed journey test.`);
   findings.push(...visualImpact.findings);
 
   const singleBiggestLeak = leakFromWeakestCategory(breakdown, penalties);
@@ -896,7 +842,7 @@ export function scoreWebsite(scrapedData: ScrapedWebsiteData): WebsiteScoring {
       crawlStrategy: scrapedData.crawl?.strategy ?? "single_page",
     },
     breakdown,
-    visualDesign,
+    visualDesign: scrapedData.visualAudit?.available ? visualDesign : undefined,
     findings: normalizedFindings,
     evidence,
     penalties,

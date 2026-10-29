@@ -1,0 +1,96 @@
+ROAST AI - DIRECT DEEPSEEK SETUP
+
+Implementation supports a key issued directly by DeepSeek at api.deepseek.com.
+Do not use an OpenRouter or other reseller key with this configuration.
+Do not paste keys into chat, commit them, or prefix them with NEXT_PUBLIC_.
+
+1. LOCAL CONFIGURATION (private web-roast/.env.local)
+
+Add/update these variables; keep only one entry for each name:
+
+ROAST_AI_PROVIDER=deepseek
+DEEPSEEK_API_KEY=YOUR_PRIVATE_DEEPSEEK_KEY
+ROAST_AI_MODEL=deepseek-flash
+ROAST_AI_ALLOWED_MODELS=deepseek-flash
+ROAST_AI_ENABLED=0
+ROAST_AI_ALLOW_LOCAL=0
+
+Keep your Supabase, Office integration, Paystack and site URL settings unchanged.
+OPENAI_API_KEY may remain for a later manual switch but is never used when the
+selected provider is DeepSeek. OPENAI_MODEL does not select the roast model.
+No API base URL variable is needed: the direct DeepSeek endpoint is fixed.
+
+2. DATABASE PREREQUISITE (Roast AI Supabase, NOT Office)
+
+If not already applied, open SQL Editor and run the CONTENTS of:
+supabase/migrations/20261015_ai_usage_limits.sql
+
+This is the existing spending-controls migration, not a new DeepSeek migration.
+The application needs the protected roast_ai_runs table and reservation function.
+Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Roast AI, not browser variables.
+No new database change is needed if this migration is already applied.
+
+3. ONE CONTROLLED LOCAL TEST
+
+Confirm the DeepSeek account has available API balance and the selected model.
+Then temporarily set both switches to 1 in .env.local:
+ROAST_AI_ENABLED=1
+ROAST_AI_ALLOW_LOCAL=1
+
+Restart the Roast AI dev server (npm run dev from web-roast).
+Run one scan locally and review its business facts, CTA, findings and PDF.
+The development channel allows one attempt per UTC day. Public signed-in users
+and Office have their own allowances. Failed attempts also consume allowances.
+After the test, set ROAST_AI_ALLOW_LOCAL=0 and restart the local server.
+Never enable local calls merely to run automated tests; they use mocked responses.
+
+4. PRODUCTION CONFIGURATION (after this code is pushed/deployed)
+
+Vercel > website-roast-ai > Settings > Environment Variables > Production:
+ROAST_AI_PROVIDER=deepseek
+DEEPSEEK_API_KEY=<your private direct DeepSeek key>
+ROAST_AI_MODEL=deepseek-flash
+ROAST_AI_ALLOWED_MODELS=deepseek-flash
+ROAST_AI_ENABLED=1
+ROAST_AI_ALLOW_LOCAL=0
+
+Keep ROAST_AI_ENABLED=0 in Preview/Development unless explicitly testing there.
+Redeploy Roast AI after changing Production variables. Changing .env.local alone
+does not change Vercel. No Office provider/key change is needed; Office continues
+to call Roast AI using its existing private shared secret.
+
+If generation should remain paused, use ROAST_AI_ENABLED=0 instead.
+Existing reports, downloads and payment access continue to work while paused.
+
+5. LIMITS AND HONEST EXPECTATIONS
+
+Existing defaults remain: 3 attempts/public user/day, 10 Office attempts/day
+shared by Office users, 20 attempts/day across all channels, plus shared budget
+units, cooldowns and a maximum of one writer and one reviewer call per attempt.
+Budget units are NOT a guaranteed currency spending cap. Review DeepSeek billing.
+The provider and model are recorded with new report generation metadata and in
+the usage ledger. Old reports are not rewritten; eligible cached reports may
+still be reused without a paid request.
+
+Writer/reviewer output limits remain 4000/800 tokens. DeepSeek requests explicitly
+disable thinking to keep reasoning from consuming the small report output cap.
+JSON mode uses our schema in the prompt and the existing local evidence/quality
+checks; it does not provide OpenAI's server-enforced JSON schema constraint.
+Invalid, empty, truncated or rejected reports are not client-ready.
+
+The current spending policy keeps image API inputs disabled. Browser visual
+measurements remain, but the model does NOT inspect screenshot pixels. This
+provider change does not add full vision analysis or guarantee equal quality.
+
+There are no automatic retries or fallback charges to OpenAI. Missing DeepSeek
+credentials, budget denial or provider errors do not cause an OpenAI request.
+
+IMPLEMENTATION VERIFICATION
+Automated tests mock both providers. They do not spend API credit or write real
+reports. A successful paid scan and output-quality comparison still need the
+configured key, balance and database controls.
+
+Official references checked 22 October 2026:
+https://api-docs.deepseek.com/guides/json_mode/
+https://api-docs.deepseek.com/api/create-chat-completion/
+https://api-docs.deepseek.com/quick_start/pricing/

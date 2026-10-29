@@ -1,3 +1,4 @@
+import { isClientReadyReport } from "@/lib/reportQuality";
 import Link from "next/link";
 import { AuthStatus } from "@/components/AuthStatus";
 import { RoastResult } from "@/components/RoastResult";
@@ -55,6 +56,11 @@ export default async function ResultPage({ params, searchParams }: ResultPagePro
     );
   }
 
+  if (report.roast.outreach) {
+    if (!isClientReadyReport(report.roast)) return <main className="p-10">This mini-audit is not ready to share.</main>;
+    const audit = report.roast.outreach;
+    return <main className="mx-auto max-w-5xl space-y-6 p-8"><p className="text-orange-400">Lockdown Studios / Complimentary website mini-audit</p><h1 className="text-3xl">A clearer picture of your website</h1><p>{audit.summary}</p><h2 className="text-xl">Worth keeping</h2><ul>{audit.strengths.map(s => <li key={s}>{s}</li>)}</ul><h2 className="text-xl">{audit.recommendation}</h2><p>{audit.recommendationReason}</p>{audit.findings.map((f, i) => <section key={i} className="space-y-2 rounded border border-white/20 p-5"><h2 className="text-xl">{f.observed}</h2><p>{f.consequence}</p><p>Suggested fix: {f.fix}</p><a href={f.pageUrl} target="_blank" rel="noreferrer">Source page</a><p className="text-sm text-gray-400">{f.evidence}</p></section>)}<h2 className="text-xl">Technical review</h2>{audit.technicalChecks?.map(check => <section key={check.name} className="rounded border border-white/20 p-4"><h3>{check.name} — {check.status.replace("_", " ")}</h3><p>{check.detail}</p></section>)}<p>{audit.scope}</p></main>;
+  }
   const safeReport = sanitizeStoredRoastReport(report);
   const access = getRoastAccess(safeReport.roast);
   const unlocked = isRoastUnlocked(safeReport.roast);

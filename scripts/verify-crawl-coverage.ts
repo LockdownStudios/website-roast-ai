@@ -49,6 +49,10 @@ async function main() {
       response.end("Temporarily unavailable");
       return;
     }
+    if (path === "/afrikaans/") {
+      response.end(page("Plaas Verblyf", "Ons bied selfsorg verblyf en kampering. Wat ons gaste s\u00ea: Baie dankie vir die vriendelike gasvryheid en rustige naweek. Bespreek jou verblyf by ons plaas.", [["/kontak-ons/", "Kontak ons"]]));
+      return;
+    }
     if (path === "/") {
       response.end(
         page("Evidence Test Company", "Business consulting for South African companies with clear service information.", [
@@ -114,6 +118,15 @@ async function main() {
       throw new Error("Reviewed page did not preserve its page-level evidence.");
     }
 
+    const reviewedUrls = scraped.crawl?.pages.map(page => new URL(page.url).origin + new URL(page.url).pathname.replace(/\/$/, "")) || [];
+    if (new Set(reviewedUrls).size !== reviewedUrls.length) throw new Error("Coverage must count each reviewed URL once.");
+    const afrikaans = await scrapeWebsite(`${origin}/afrikaans/`);
+    if (!afrikaans.trustSignals.includes("wat ons gaste s\u00ea") || !afrikaans.ctas.includes("kontak ons")) {
+      throw new Error("Afrikaans guest testimonials or contact action were missed.");
+    }
+    if (!afrikaans.crawl?.pages.some(item => item.ctaEvidence?.some(action => action.label === "Kontak ons"))) {
+      throw new Error("Afrikaans contact destination evidence was not retained.");
+    }
     console.log(
       `Crawl coverage checks passed (${coverage.reviewedPageCount}/${coverage.discoveredPageCount} pages reviewed).`,
     );

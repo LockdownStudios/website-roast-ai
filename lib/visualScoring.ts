@@ -38,53 +38,57 @@ export function scoreVisualAudit(scrapedData: ScrapedWebsiteData): VisualScoreIm
   }
 
   const summary = visualAudit.summary;
+  const views = [visualAudit.desktop, visualAudit.mobile].filter(view => view?.captureReadiness?.settled !== false);
+  const measuredCta = views.some(view => view && view.ctaCount > 0 && !!view.primaryCtaText);
+  const clearInBoth = views.length === 2 && views.every(view => view && view.primaryCtaAboveFold && view.primaryCtaContrast >= 3 && view.primaryCtaAreaRatio >= 0.001);
+  if (!measuredCta) evidence.push("CTA prominence is unverified: no candidate was established. Detector silence is not a missing or weak CTA.");
   evidence.push(
     `Visual threshold profile: ${profile.label} (ctaWeak<${profile.ctaWeak}, readabilityWeak<${profile.readabilityWeak}, hierarchyWeak<${profile.hierarchyWeak}, consistencyWeak<${profile.consistencyWeak}, motionHigh>${profile.motionHigh}).`,
   );
 
-  if (summary.ctaProminence < profile.ctaWeak - 12) {
+  if (measuredCta && !clearInBoth && summary.ctaProminence < profile.ctaWeak - 12) {
     addAdjustment(
       penalties,
-      "Weak Visual CTA",
+      "CTA Heuristic Flag",
       4,
-      "Primary CTA lacks visual dominance, so high-intent users may miss the next step.",
+      "Detected CTA contrast/scale triggered a heuristic review flag. Confirm in the captured viewport; no missed actions or customer behaviour was measured.",
     );
-  } else if (summary.ctaProminence < profile.ctaWeak) {
+  } else if (measuredCta && !clearInBoth && summary.ctaProminence < profile.ctaWeak) {
     addAdjustment(
       penalties,
       "Soft Visual CTA",
       2,
-      "CTA exists but does not stand out strongly in the visual hierarchy.",
+      "Detected CTA contrast/scale warrants a visual check; hierarchy and customer behaviour remain unverified.",
     );
-  } else if (summary.ctaProminence >= profile.ctaStrong) {
+  } else if (measuredCta && summary.ctaProminence >= profile.ctaStrong) {
     addAdjustment(
       bonuses,
       "Clear Visual CTA",
       2,
-      "Primary CTA is visually prominent and supports faster action.",
+      "Detected CTA contrast, size and placement meet the heuristic thresholds; action speed was not tested.",
     );
   }
 
   if (summary.readability < profile.readabilityWeak - 12) {
     addAdjustment(
       penalties,
-      "Low Visual Readability",
+      "Readability Heuristic Flag",
       4,
-      "Weak contrast or typography readability likely slows comprehension.",
+      "An automated contrast/typography heuristic flagged this captured sample. Confirm against the pixels; no human reading difficulty was measured.",
     );
   } else if (summary.readability < profile.readabilityWeak) {
     addAdjustment(
       penalties,
       "Medium Readability Risk",
       2,
-      "Readability is mixed and can hurt message clarity under quick scanning.",
+      "Contrast/typography sampling warrants a viewport check; reading difficulty was not measured.",
     );
   } else if (summary.readability >= profile.readabilityStrong) {
     addAdjustment(
       bonuses,
       "Strong Readability",
       1,
-      "Contrast and typography are visually readable across key sections.",
+      "Contrast/typography sampling met the heuristic threshold in the captured viewports, not across all sections.",
     );
   }
 
@@ -93,14 +97,14 @@ export function scoreVisualAudit(scrapedData: ScrapedWebsiteData): VisualScoreIm
       penalties,
       "Weak Visual Hierarchy",
       3,
-      "Above-the-fold structure looks cluttered and weakens decision flow.",
+      "Layout-density sampling triggered a hierarchy check; clutter and decision-flow effects were not measured.",
     );
   } else if (summary.hierarchy >= profile.hierarchyStrong) {
     addAdjustment(
       bonuses,
       "Clean Visual Hierarchy",
       1,
-      "Above-the-fold layout has a clearer conversion order.",
+      "Captured layout measurements met the hierarchy threshold; no conversion behaviour was tested.",
     );
   }
 
@@ -109,30 +113,30 @@ export function scoreVisualAudit(scrapedData: ScrapedWebsiteData): VisualScoreIm
       penalties,
       "Visual Inconsistency",
       3,
-      "Color/font consistency is weak, reducing trust and polish perception.",
+      "Colour/font counts triggered a consistency check; perceived trust or polish was not measured.",
     );
   } else if (summary.consistency >= profile.consistencyStrong) {
     addAdjustment(
       bonuses,
       "Consistent Visual Style",
       1,
-      "Color and typography consistency support buyer confidence.",
+      "Captured colour/font counts met the consistency threshold; buyer confidence was not measured.",
     );
   }
 
   if (summary.motionDistraction > profile.motionHigh) {
     addAdjustment(
       penalties,
-      "Distracting Motion",
+      "Motion Heuristic Flag",
       2,
-      "Animation density is high enough to compete with CTA focus.",
+      "Animation-related style counts triggered a motion check; actual distraction, jitter or task interference was not tested.",
     );
   } else if (summary.motionDistraction <= profile.motionLow) {
     addAdjustment(
       bonuses,
       "Controlled Motion",
       1,
-      "Motion is restrained, which helps keep attention on key conversion actions.",
+      "Animation-related style counts were low; user attention and scrolling smoothness were not tested.",
     );
   }
 
@@ -148,17 +152,17 @@ export function scoreVisualAudit(scrapedData: ScrapedWebsiteData): VisualScoreIm
         penalties,
         "Mobile CTA Placement Gap",
         2,
-        "Desktop CTA is visible, but mobile placement is weaker and can leak conversions.",
+        "A CTA candidate was detected above the fold on desktop but not mobile. This is a cross-viewport detector discrepancy, not proof of a missing mobile action.",
       );
     }
   }
 
-  if (siteContext.niche === "ecommerce" && summary.ctaProminence < profile.ctaWeak) {
+  if (measuredCta && !clearInBoth && siteContext.niche === "ecommerce" && summary.ctaProminence < profile.ctaWeak) {
     addAdjustment(
       penalties,
       "Ecommerce CTA Urgency Gap",
       2,
-      "Ecommerce pages need stronger visual buy/checkout cues to reduce abandonment.",
+      "Detected purchase-action prominence triggered a heuristic check; no abandonment was measured.",
     );
   }
 

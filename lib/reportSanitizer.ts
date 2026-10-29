@@ -8,7 +8,7 @@ import type {
   VisualAudit,
   WebsiteScoring,
 } from "./types";
-import { diagnoseWebsite } from "./diagnosis";
+import { diagnoseWebsite, parseBusinessDiagnosis } from "./diagnosis";
 import { buildImplementationBlueprint } from "./implementationGuide";
 import { inferSiteNiche } from "./siteContext";
 
@@ -356,7 +356,7 @@ export function sanitizeRoastPayload(
   scoring?: WebsiteScoring,
 ): RoastResultPayload {
   const options = { scraped, scoring };
-  const diagnosis = scraped && scoring ? diagnoseWebsite(scraped, scoring) : roast.diagnosis;
+  const diagnosis = parseBusinessDiagnosis(roast.diagnosis) || (scraped && scoring ? diagnoseWebsite(scraped, scoring) : undefined);
   return {
     ...roast,
     diagnosis,

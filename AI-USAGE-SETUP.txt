@@ -1,0 +1,90 @@
+ROAST AI SPENDING SAFEGUARDS
+
+CURRENT STATE
+No new paid AI calls are authorised unless ROAST_AI_ENABLED=1.
+Local development additionally requires ROAST_AI_ALLOW_LOCAL=1.
+Do not enable either until billing, model permissions and the database migration
+are ready. Saved reports and offline scoring/PDF tests do not need API credit.
+
+ONE-TIME DATABASE SETUP
+Open the Roast AI Supabase project (NOT Office), SQL Editor, and run the contents
+of supabase/migrations/20261015_ai_usage_limits.sql. Do not run the filename.
+The migration creates a protected audit ledger and an atomic reservation RPC.
+It does not change or delete existing reports, leads, purchases or invoices.
+
+DEFAULT LIMITS
+Signed-in public user: 3 new AI attempts per UTC day. Guests must sign in.
+Office: 10 attempts per UTC day shared across the Office integration. This is
+not per employee because the current API authenticates Office with one secret.
+Development: 1 live attempt per UTC day shared by local test scripts.
+All sources together: 20 attempts per UTC day, including failed attempts.
+Same actor/site: 10-minute cooldown. One active attempt per actor for 10 minutes.
+No automatic rewrite/transport retry. Maximum 1 writer + 1 reviewer call.
+Writer output: 4000 tokens maximum; reviewer: 800, including reasoning tokens.
+Input: 65000 UTF-8 bytes per Terra call (80000 for legacy providers/models).
+Oversized input is rejected, not silently cut.
+Image API inputs: disabled. Browser measurements remain; the AI is explicitly
+told it has not visually inspected screenshot pixels. This is a quality/cost
+tradeoff, not an equivalent replacement for a vision audit.
+Current local selection: OpenAI, using gpt-5.6-terra.
+Provider: ROAST_AI_PROVIDER selects openai (default) or direct deepseek.
+See DEEPSEEK-SETUP.txt for the exact provider/key/model configuration.
+Model: ROAST_AI_MODEL defaults to gpt-5.6-terra for OpenAI or deepseek-flash for
+DeepSeek, with a matching default allowlist. Explicit old model settings must
+be changed when switching providers. There is no automatic provider fallback.
+The old OPENAI_MODEL value no longer selects a generation model. Verify project
+access to the chosen model before enabling. Terra access was verified locally.
+
+SHARED BUDGETS
+1,000,000 units/day and 10,000,000 units/month, UTC. Each attempt reserves
+2 * maximum input bytes + writer/reviewer output allowance + 2048 overhead.
+These conservative reservations are not actual token consumption or currency.
+They may stop generation before the nominal 20-attempt daily cap.
+Reservations are retained for failed, timed-out and crashed attempts because
+provider costs may still occur. Provider-reported input/output usage and model
+call counts are recorded separately. Missing usage must not be read as zero cost.
+An exhausted-credit response blocks further authorisation for one hour.
+OpenAI also checks ROAST_AI_MAX_RUN_USD (default 0.40 USD) before reserving.
+The active Terra estimate uses standard uncached rates of 2 USD/million input
+tokens and 12 USD/million output tokens, checked on 28 October 2026:
+https://developers.openai.com/api/docs/models/gpt-5.6-terra
+Cache-write input is billed at 1.25x, or 2.50 USD/million tokens. The 65000-byte
+Terra default includes this in its conservative two-call estimate: 0.38772 USD.
+Terra uses reasoning_effort=none and service_tier=default. Output caps include
+all output tokens. Temperature/top_p overrides are not forwarded to Terra.
+Legacy GPT-4o mini rates remain for offline regression fixtures, not the active
+default or fallback. There is no automatic model escalation.
+This is an estimate, not a promise about the provider's final bill. Rates can
+change; tax, exchange rates, other applications and non-report use are excluded.
+Unknown OpenAI models fail closed rather than using a cheaper model's rate.
+Each request is forced to one completion, non-streaming, with response storage
+disabled. Tools/audio requests are blocked. The reviewer receives the full
+report and evidence but only the relevant score drivers, not duplicate scoring
+internals. Quality review is not skipped to save tokens.
+If shared storage is unavailable, generation fails closed rather than bypassing
+the budget. No in-memory fallback is used for financial enforcement.
+Use a dedicated provider project/key and its available billing controls as an
+additional boundary. Application units are NOT a guaranteed Rand/dollar cap.
+
+DEVELOPMENT WITHOUT PAID CALLS
+node --conditions react-server --import tsx scripts/smoke-reviewed-roast.ts https://www.tashascafe.com/ --name tashas-v31
+The default command replays saved evidence and rescoring only; it never calls
+OpenAI and never re-certifies the old narrative. Live tests require --live,
+both opt-in switches, the database migration and available provider credit.
+All automated tests use fake model responses, not live OpenAI calls.
+
+BEFORE PRODUCTION ENABLEMENT
+Apply the SQL in Roast AI Supabase. Configure the policy variables shown in
+.env.example in the Roast AI Vercel project, with ROAST_AI_ENABLED=0 initially.
+Check the model's project permissions and pricing privately. Keep local calls
+disabled. Deploy and verify the database controls before enabling new scans.
+Existing purchased report access/payment unlocks are not quota-gated.
+User/report quality checks still apply: failed output is not sent as a report.
+No production configuration or deployment was changed during implementation.
+
+USAGE REVIEW (service-role/admin SQL only)
+select date_trunc('day', created_at at time zone 'UTC') as utc_day, channel,
+  count(*) as attempts, sum(reserved_units) as reserved_units,
+  sum(input_tokens) as reported_input_tokens,
+  sum(output_tokens) as reported_output_tokens, sum(model_calls) as model_calls
+from public.roast_ai_runs group by 1,2 order by 1 desc,2;

@@ -1,5 +1,9 @@
+import { fullReportPresentation, compactTechnicalSummary } from "./reportPresentation";
+import { renderCompactReportPdf } from "./compactReportPdf";
+import { parseOutreach } from "./outreachContract";
 import "server-only";
 import PDFDocument from "pdfkit";
+import { isClientReadyReport } from "./reportQuality";
 import {
   businessModelLabel,
   painPointLabel,
@@ -8,10 +12,12 @@ import {
 import { buildImplementationBlueprint } from "./implementationGuide";
 import { BREAKDOWN_KEYS, CATEGORY_WEIGHTS, categoryRatio } from "./scoringConfig";
 import type {
+  OutreachAudit,
   ReportAccess,
   RoastResultPayload,
   ScrapedWebsiteData,
   StoredRoastReport,
+  TechnicalCheck,
   WebsiteScoring,
 } from "./types";
 
@@ -36,6 +42,7 @@ const BREAKDOWN_LABELS: Record<keyof WebsiteScoring["breakdown"], string> = {
 type RenderRoastReportPdfOptions = {
   access: ReportAccess;
   isUnlocked: boolean;
+  internalDraftPreview?: boolean;
 };
 
 export function roastReportFilename(report: StoredRoastReport): string {
@@ -53,12 +60,19 @@ export async function renderRoastReportPdf(
   report: StoredRoastReport,
   options: RenderRoastReportPdfOptions,
 ): Promise<Buffer> {
+  if (options.internalDraftPreview && process.env.NODE_ENV !== "development") throw new Error("Draft PDF previews are available only in local development.");
+  if (report.roast.outreach) {
+    if (!isClientReadyReport(report.roast) && !options.internalDraftPreview) throw new Error("Outreach report has not passed review.");
+    return renderBrandedOutreachPdf(report.roast.outreach, Boolean(options.internalDraftPreview), reportSubject(report.url, report.scraped));
+  }
+  if (options.isUnlocked && (isClientReadyReport(report.roast) || options.internalDraftPreview)) return renderCompactFullReport(report, Boolean(options.internalDraftPreview));
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
       margin: 48,
+      bufferPages: Boolean(options.internalDraftPreview),
       info: {
-        Title: `${reportSubject(report.url, report.scraped)} Website Roast Report`,
+        Title: `${options.internalDraftPreview ? "INTERNAL DRAFT - " : ""}${reportSubject(report.url, report.scraped)} Website Roast Report`,
         Author: "Website Roast AI",
         Subject: "Conversion website roast report",
       },
@@ -71,11 +85,39 @@ export async function renderRoastReportPdf(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    drawCover(doc, report, options);
-    addContentPage(doc);
+    if (isClientReadyReport(report.roast) || options.internalDraftPreview) {
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(ROAST_BG);
+      doc.x = doc.page.margins.left;
+      doc.y = doc.page.margins.top;
+      drawCompactHeader(doc, report);
+    } else {
+      drawCover(doc, report, options);
+      addContentPage(doc);
+    }
     drawReportBody(doc, report, options);
+    if (options.internalDraftPreview) {
+      const range = doc.bufferedPageRange();
+      for (let index = range.start; index < range.start + range.count; index++) {
+        doc.switchToPage(index);
+        doc.save();
+        doc.rect(0, 0, doc.page.width, 26).fill(ROAST_ACCENT);
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(ROAST_BLACK).text("INTERNAL DRAFT - NOT APPROVED FOR CLIENTS", 48, 9, { width: contentWidth(doc), align: "center", lineBreak: false });
+        doc.restore();
+      }
+    }
     doc.end();
   });
+}
+
+function drawCompactHeader(doc: PDFKit.PDFDocument, report: StoredRoastReport) {
+  const width = contentWidth(doc);
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(ROAST_ACCENT_SOFT).text("WEBSITE ROAST AI", 48, 40);
+  doc.fontSize(23).fillColor(ROAST_TEXT).text(reportSubject(report.url, report.scraped), 48, 62, { width: width - 115, height: 58 });
+  doc.fontSize(22).fillColor(ROAST_ACCENT_SOFT).text(`${report.roast.score.toFixed(1)}/10`, doc.page.width - 145, 62, { width: 97, align: "right" });
+  doc.font("Helvetica").fontSize(9).fillColor(ROAST_MUTED).text(visibleUrl(report.url), 48, 122, { width, height: 25 });
+  const coverage = report.scraped.crawl?.coverage;
+  doc.text(`${formatDate(report.createdAt)} | ${report.scraped.crawl?.pageCount || 1} pages reviewed${coverage ? ` of ${coverage.discoveredPageCount} discovered${coverage.truncated ? " (sampled)" : ""}` : ""}`, 48, 151, { width });
+  doc.y = 177;
 }
 
 function drawReportBody(
@@ -100,14 +142,19 @@ function drawReportBody(
   );
 
   if (options.isUnlocked) {
-    drawSectionTitle(doc, "Score Snapshot", 82);
+    drawSectionTitle(doc, "Score Snapshot", 280);
     drawScoreGrid(doc, scoring);
-    drawSectionTitle(doc, "Lost Customers", 64);
+    doc.font("Helvetica").fontSize(11);
+    const lossHeight = doc.heightOfString(cleanReportText(roast.lost_customers, subject), { width: contentWidth(doc), lineGap: 4 });
+    drawSectionTitle(doc, "Possible Customer Friction", lossHeight + 18);
     drawParagraph(doc, cleanReportText(roast.lost_customers, subject), 11, ROAST_TEXT);
     drawBulletSection(doc, "Priority Fixes", priorityFixes(report, subject));
-    drawSectionTitle(doc, "High Impact Improvement", 64);
+    doc.font("Helvetica").fontSize(11);
+    const impactHeight = doc.heightOfString(cleanReportText(roast.high_impact, subject), { width: contentWidth(doc), lineGap: 4 });
+    drawSectionTitle(doc, "High Impact Improvement", impactHeight + 18);
     drawParagraph(doc, cleanReportText(roast.high_impact, subject), 11, ROAST_TEXT);
-    drawBlueprint(doc, report, subject);
+    if (roast.technicalChecks?.length) drawTechnicalChecks(doc, roast.technicalChecks);
+    if (!isClientReadyReport(roast) && !options.internalDraftPreview) drawBlueprint(doc, report, subject);
   } else {
     drawLockedNotice(doc, options.access);
   }
@@ -208,7 +255,10 @@ function drawCover(
     .fontSize(9)
     .fillColor(ROAST_MUTED)
     .text("NEXT ACTION", 66, briefY + 150, { characterSpacing: 0.8 });
-  doc.font("Helvetica-Bold").fontSize(11).fillColor(ROAST_ACCENT_SOFT).text(blueprint.primaryCta, 152, briefY + 147, {
+  const primaryAction = isClientReadyReport(report.roast)
+    ? report.scraped.siteFacts?.ctas[0]?.value || report.scraped.ctas[0] || "Not established in reviewed pages"
+    : blueprint.primaryCta;
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(ROAST_ACCENT_SOFT).text(primaryAction, 152, briefY + 147, {
     width: width - 200,
     height: 22,
     ellipsis: true,
@@ -235,7 +285,7 @@ function drawPagesReviewed(
     return;
   }
 
-  drawSubheadingBullets(doc, "Pages Reviewed", cleanList(pages, subject, 6));
+  drawSubheadingBullets(doc, pages.length > 6 ? "Reviewed Pages (6 shown)" : "Pages Reviewed", cleanList(pages, subject, 6));
 }
 
 function drawBlueprint(
@@ -276,7 +326,7 @@ function priorityFixes(report: StoredRoastReport, subject: string): string[] {
     return `${fix.where}: ${fix.title}. ${firstStep} ${impact} ${effort} Example: ${fix.example}`;
   });
 
-  return cleanList(fixes.length > 0 ? fixes : report.roast.quick_fixes, subject, 4);
+  return cleanList(fixes.length > 0 ? fixes : report.roast.quick_fixes, subject, 5);
 }
 
 function drawDiagnosis(doc: PDFKit.PDFDocument, report: StoredRoastReport) {
@@ -299,7 +349,7 @@ function drawDiagnosis(doc: PDFKit.PDFDocument, report: StoredRoastReport) {
 function drawScoreGrid(doc: PDFKit.PDFDocument, scoring: WebsiteScoring) {
   const gap = 12;
   const cardWidth = (contentWidth(doc) - gap) / 2;
-  const cardHeight = 64;
+  const cardHeight = 76;
   let x = doc.page.margins.left;
   let y = doc.y;
   const scoreCards: Array<{
@@ -321,6 +371,8 @@ function drawScoreGrid(doc: PDFKit.PDFDocument, scoring: WebsiteScoring) {
       primary: `${scoring.visualDesign.score.toFixed(1)}/10`,
       secondary: scoring.visualDesign.label,
     });
+  } else {
+    scoreCards.push({ key: "visual-design", label: "Visual Design", primary: "Not assessed", secondary: "No visual capture available" });
   }
 
   scoreCards.forEach((card, index) => {
@@ -435,6 +487,7 @@ function drawParagraph(
     return;
   }
   const width = contentWidth(doc);
+  doc.font("Helvetica").fontSize(fontSize);
   const height = doc.heightOfString(text, { width, lineGap: 4 });
   ensureRoom(doc, height + 18);
   doc.font("Helvetica").fontSize(fontSize).fillColor(color).text(text, {
@@ -473,6 +526,7 @@ function drawCallout(doc: PDFKit.PDFDocument, title: string, text: string) {
     return;
   }
   const innerWidth = contentWidth(doc) - 32;
+  doc.font("Helvetica").fontSize(11);
   const textHeight = doc.heightOfString(cleaned, { width: innerWidth, lineGap: 3 });
   const height = Math.max(84, textHeight + 52);
   ensureRoom(doc, height + 18);
@@ -511,7 +565,7 @@ function drawFooter(
     .fontSize(8.5)
     .fillColor(ROAST_MUTED)
     .text(
-      `Report ID ${report.id} | ${options.isUnlocked ? "full report" : "preview report"} | generated from public website signals`,
+      `Report ID ${report.id} | ${options.internalDraftPreview ? "UNAPPROVED INTERNAL DRAFT" : options.isUnlocked ? "full report" : "preview report"} | generated from public website signals`,
       doc.page.margins.left + 14,
       y + 30,
       { width: contentWidth(doc) - 28 },
@@ -628,24 +682,11 @@ function cleanReportText(value: string, subject: string): string {
     .replace(/\bCurrent contact snapshot:/gi, "Contact gap:")
     .replace(/\.{2,}/g, ".");
 
-  if (hasMalformedReportText(cleaned)) {
-    return `${subject} has a credibility gap: the page asks for trust before showing enough proof near the main action.`;
-  }
-
   return cleaned;
 }
 
 function cleanText(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
-}
-
-function hasMalformedReportText(value: string) {
-  return (
-    /(^|[\s([{])"[^"]+"[a-z]/i.test(value) ||
-    /(^|[\s([{])"[^"]+"\s*"[^"]+"/i.test(value) ||
-    /"[^"]+"\s*the current homepage headline/i.test(value) ||
-    /\basks\s+For\s+buyers\b/i.test(value)
-  );
 }
 
 function truncateAtWord(value: string, limit: number): string {
@@ -694,4 +735,40 @@ function formatDate(value: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+
+/** The roast remains the narrative; technical checks support it rather than becoming a checklist page. */
+export function renderBrandedOutreachPdf(value: OutreachAudit, draft = false, subject?: string): Promise<Buffer> {
+  const audit = parseOutreach(value);
+  const url = audit.images[0].sourceUrl;
+  return renderCompactReportPdf({
+    name: subject || new URL(url).hostname.replace(/^www\./, ""), url,
+    meta: "Complimentary website roast | visual, UX and technical evidence",
+    summary: audit.summary, leak: `${audit.findings[0].observed} ${audit.findings[0].consequence}`,
+    strengths: audit.strengths, verdict: `${audit.recommendationReason}`,
+    coverage: audit.scope, technical: compactTechnicalSummary(audit.technicalChecks),
+    findings: audit.findings.map(f => ({ headline: f.headline || f.observed, observation: f.headline ? f.observed : "", consequence: f.consequence, fix: f.fix, source: compactSource(f.pageUrl) })),
+  }, draft);
+}
+
+function compactSource(url: string) {
+  try { const page = new URL(url); return `${page.hostname}${page.pathname}`; } catch { return url; }
+}
+
+function renderCompactFullReport(report: StoredRoastReport, draft: boolean) {
+  return renderCompactReportPdf(fullReportPresentation(report, reportSubject(report.url, report.scraped)), draft);
+}
+
+function drawTechnicalChecks(doc: PDFKit.PDFDocument, checks: TechnicalCheck[]) {
+  drawSectionTitle(doc, "Technical Review");
+  drawParagraph(doc, "These checks describe the sampled HTML, not a performance, security or search-ranking certification. Review flags need confirmation before making changes.", 9, ROAST_MUTED);
+  for (const check of checks) {
+    const label = check.status === "not_tested" ? "NOT TESTED" : check.status === "review" ? "REVIEW" : "OBSERVED";
+    doc.font("Helvetica").fontSize(9);
+    const height = doc.heightOfString(check.detail, { width: contentWidth(doc), lineGap: 2 });
+    drawSubheading(doc, `${check.name} | ${label}`, height + 24);
+    drawParagraph(doc, check.detail, 9);
+    if (check.pageUrls.length) drawParagraph(doc, `Pages: ${check.pageUrls.slice(0, 3).join(" | ")}${check.pageUrls.length > 3 ? ` (+${check.pageUrls.length - 3} more sampled pages)` : ""}`, 7, ROAST_MUTED);
+  }
 }

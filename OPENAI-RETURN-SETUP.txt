@@ -1,0 +1,52 @@
+ROAST AI - RETURN TO OPENAI (28 October 2026)
+
+SUPERSEDED: active selection is now gpt-5.6-terra. Follow TERRA-SETUP.txt
+instead of the historical mini-model settings below.
+
+Local provider/model selection has been switched to OpenAI. No keys were
+replaced, no production settings were changed and no paid requests were made.
+
+IN THE ROAST AI VERCEL PROJECT: website-roast-ai
+Do not change the Office project's AI settings.
+
+1. Add OpenAI API credit privately and confirm the project's API key is current.
+   Set OPENAI_API_KEY in Vercel privately; never put it in chat or Git.
+
+2. Set these environment variables:
+   ROAST_AI_PROVIDER=openai
+   ROAST_AI_MODEL=gpt-4o-mini
+   ROAST_AI_ALLOWED_MODELS=gpt-4o-mini
+   OPENAI_MODEL=gpt-4o-mini
+   ROAST_AI_MAX_RUN_USD=0.03
+   ROAST_AI_ALLOW_LOCAL=0
+   ROAST_AI_ENABLED=0
+
+3. Ensure the EXISTING usage migration was applied to ROAST AI Supabase:
+   supabase/migrations/20261015_ai_usage_limits.sql
+   No additional migration is needed for this update. If it is missing, run
+   its SQL contents, not the filename. Controls fail closed without it.
+
+4. Deploy the reviewed code. Enable ROAST_AI_ENABLED=1 in Production only,
+   and redeploy after confirming billing and model access. Keep Preview and
+   Development paused. The local file remains paused unless explicitly enabled.
+
+5. Validate ONE controlled report first, checking quality and usage in the
+   OpenAI dashboard and roast_ai_runs ledger before running a batch.
+   OpenAI currently labels GPT-4o mini deprecated. Model access and retirement
+   must be checked before enablement; this change does not silently select a
+   newer, more expensive model. Changing models requires an approved cost rate,
+   explicit allowlist update and regression tests.
+
+Existing saved reports, report PDFs, payment access and the free authenticated
+Office integration remain unchanged. Existing valid cached reports are reused.
+The DeepSeek key is no longer used by this local selection; remove it privately
+from Vercel if you no longer want to retain the optional provider configuration.
+
+GUARDS
+No automatic retry or model/provider escalation. At most one writer plus one
+reviewer request per new scan. Sign-in required for new public generations.
+Defaults: public user 3 attempts/day; Office 10 shared attempts/day; global 20.
+Shared reservation budgets can stop scans sooner than these attempt limits.
+Failed requests retain reservations because they may still incur provider cost.
+Currency ceiling is an estimate for this application's report calls, not a hard
+account-wide billing cap. Do not enable unlimited automatic credit recharge.

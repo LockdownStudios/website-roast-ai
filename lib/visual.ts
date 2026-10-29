@@ -1,5 +1,7 @@
+import { browserLaunchOptions } from "./browserRuntime";
 import "server-only";
 import { createHash } from "node:crypto";
+import { waitForVisualReadiness } from "./visualReadiness";
 import { clampToRange, roundToOne } from "./scoringConfig";
 import type {
   VisualAudit,
@@ -62,7 +64,7 @@ type ViewportRawMetrics = Omit<
 >;
 
 const CTA_REGEX_SOURCE =
-  "(book|schedule|quote|consult|call|apply|start|sign\\s*up|get\\s*started|trial|buy\\s*now|shop\\s*now|contact|talk|speak|demo|check\\s+availability|book\\s+direct|reserve\\s+a\\s+table|make\\s+a\\s+reservation|view\\s+menu)";
+  "(discuss|request|book|schedule|quote|consult|call|apply|start|sign\\s*up|get\\s*started|trial|buy\\s*now|shop\\s*now|contact|talk|speak|demo|check\\s+availability|book\\s+direct|reserve\\s+a\\s+table|make\\s+a\\s+reservation|view\\s+menu)";
 
 const VIEWPORTS: ViewportPreset[] = [
   {
@@ -249,27 +251,27 @@ function buildFindings(
   const findings: string[] = [];
 
   if (summary.ctaProminence < 45) {
-    findings.push("Primary CTA is visually weak or buried above the fold.");
+    findings.push("CTA prominence heuristic is low; verify candidate detection and the actual viewport before describing visibility.");
   }
 
   if (summary.readability < 50) {
-    findings.push("Text readability is weak due to low contrast or cramped typography.");
+    findings.push("Contrast/typography sampling triggered a readability check; human reading difficulty was not measured.");
   }
 
   if (summary.hierarchy < 50) {
-    findings.push("Above-the-fold hierarchy is cluttered, so the main message does not land fast.");
+    findings.push("Layout-density sampling triggered a hierarchy check; visual clutter or comprehension speed was not established.");
   }
 
   if (summary.consistency < 45) {
-    findings.push("Visual style feels inconsistent (too many color buckets or font styles).");
+    findings.push("Colour/font counts triggered a consistency check; confirm actual visual coherence in the screenshots.");
   }
 
   if (summary.motionDistraction > 60) {
-    findings.push("Motion density is high enough to distract from conversion actions.");
+    findings.push("Animation-related CSS signals were detected; actual distraction and scrolling behaviour were not measured.");
   }
 
   if (desktop.primaryCtaAboveFold && !mobile.primaryCtaAboveFold) {
-    findings.push("CTA is visible on desktop but weakly placed on mobile.");
+    findings.push("The detector identified an above-fold CTA on desktop but not mobile; verify the mobile pixels before concluding an action is missing.");
   }
 
   if (findings.length === 0) {
@@ -307,10 +309,18 @@ async function analyzeViewport(
     const page = await context.newPage();
     await page.goto(url, {
       waitUntil: "domcontentloaded",
-      timeout: 9000,
+      timeout: 12000,
     });
-    await page.waitForTimeout(450);
     await page.evaluate<void>("var __name = (fn) => fn;");
+    const interactionNotes: string[] = [];
+    const skippedIntro = await page.evaluate(() => {
+      const element = [...document.querySelectorAll<HTMLElement>("button, a, [role=button]")].find(el => /^skip(?: intro)?$/i.test((el.textContent || "").trim()) && el.getBoundingClientRect().width > 0);
+      if (!element) return false;
+      element.click();
+      return true;
+    }, undefined);
+    if (skippedIntro) interactionNotes.push("Clicked the visible Skip intro control before capturing the settled homepage.");
+    const captureReadiness = await page.evaluate(waitForVisualReadiness, 6000);
 
     const raw = await page.evaluate<ViewportRawMetrics, { ctaPattern: string }>(
       ({ ctaPattern }) => {
@@ -477,8 +487,7 @@ async function analyzeViewport(
           }
 
           const animationMs = parseDurationMs(style.animationDuration);
-          const transitionMs = parseDurationMs(style.transitionDuration);
-          if (aboveFold && (animationMs >= 120 || transitionMs >= 300)) {
+          if (aboveFold && animationMs >= 120 && style.animationPlayState !== "paused") {
             animatedElementCount += 1;
           }
 
@@ -549,7 +558,9 @@ async function analyzeViewport(
             role === "button" ||
             className.includes("btn");
 
-          if (isInteractive && text && ctaRegex.test(text.toLowerCase())) {
+          const buttonLike = tag === "button" || role === "button" || /(?:btn|button|cta)/i.test(className) || (rect.width >= 60 && rect.height >= 32 && !element.closest("nav, header") && !isTransparent(style.backgroundColor) && Number.parseFloat(style.paddingLeft) >= 8);
+          const utility = /^(?:menu|toggle navigation|search|close|facebook|instagram|linkedin)$/i.test(text);
+          if (isInteractive && text && !utility && (ctaRegex.test(text.toLowerCase()) || (buttonLike && text.length <= 90))) {
             const areaRatio = clamp((rect.width * rect.height) / viewportArea, 0, 1);
             const contrast = foreground ? contrastRatio(foreground, background) : 0;
             const score =
@@ -624,6 +635,8 @@ async function analyzeViewport(
       autoplayMediaCount: raw.autoplayMediaCount,
       screenshotHash: createHash("sha256").update(screenshot).digest("hex"),
       screenshotDataUrl: `data:image/jpeg;base64,${screenshot.toString("base64")}`,
+      captureReadiness,
+      interactionNotes,
     };
   } finally {
     await context.close();
@@ -672,10 +685,7 @@ export async function analyzeVisualSignals(
   let browser: BrowserLike | null = null;
 
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-dev-shm-usage"],
-    });
+    browser = await chromium.launch(await browserLaunchOptions());
 
     const selectedKeyPages = [...new Set(keyPageUrls)]
       .filter((pageUrl) => pageUrl !== normalized && /^https?:\/\//i.test(pageUrl))
@@ -700,6 +710,14 @@ export async function analyzeVisualSignals(
       28000,
       "Visual analysis",
     );
+    if (!desktop.captureReadiness?.settled || !mobile.captureReadiness?.settled) {
+      return {
+        ...unavailableAudit("The submitted page did not settle reliably; visual scoring was withheld."),
+        desktop, mobile,
+        keyPages: keyPages.filter((page): page is NonNullable<typeof page> => Boolean(page)),
+        evidence: [desktop, mobile].map(view => `${view.viewport}: ${view.captureReadiness?.reasons.join("; ") || "settled"}`),
+      };
+    }
     const summary = buildVisualSummary(desktop, mobile);
     const findings = buildFindings(summary, desktop, mobile);
     const evidence = buildEvidence(summary, desktop, mobile);

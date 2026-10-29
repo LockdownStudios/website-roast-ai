@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRoastWithUsage } from "@/lib/ai";
+import { AiUsageError, assertAiEnabled } from "@/lib/aiUsage";
+import { isClientReadyReport } from "@/lib/reportQuality";
 import { extractBearerToken, getSupabaseUserFromAccessToken } from "@/lib/auth";
 import { buildTeaserRoast, createFreeTeaserAccess, getRoastAccess, isRoastUnlocked, withRoastAccess } from "@/lib/reportAccess";
 import { scrapeWebsite } from "@/lib/scrape";
@@ -150,7 +152,7 @@ export async function POST(request: NextRequest) {
     const token = extractBearerToken(request.headers.get("authorization"));
     const user = token ? await getSupabaseUserFromAccessToken(token) : null;
     const authExpired = Boolean(token && !user);
-    const workerRequest = request.headers.get("x-roast-worker-secret") === process.env.ROAST_JOB_WORKER_SECRET;
+    const workerRequest = Boolean(process.env.ROAST_JOB_WORKER_SECRET && request.headers.get("x-roast-worker-secret") === process.env.ROAST_JOB_WORKER_SECRET);
     const userId = user?.id ?? (workerRequest ? body.workerUserId : undefined);
 
     if (!normalizedUrl) {
@@ -161,6 +163,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (areRoastJobsEnabled() && !workerRequest) {
+      assertAiEnabled({ channel: "public", userId });
       const job = await enqueueRoastScan(normalizedUrl, userId);
       return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
     }
@@ -184,7 +187,7 @@ export async function POST(request: NextRequest) {
         ? await findRoastByUrlAndHash(normalizedUrl, userScopedScrapeHash)
         : null) ?? (await findRoastByUrlAndHash(normalizedUrl, scrapeHash));
 
-    if (existing) {
+    if (existing && isClientReadyReport(existing.roast)) {
       const existingWithAccess = existing.roast.access
         ? existing
         : {
@@ -219,8 +222,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const generation = await generateRoastWithUsage(scraped, scoring);
-    if (generation.fallbackUsed) {
+    const generation = await generateRoastWithUsage(scraped, scoring, { channel: "public", userId });
+    if (!isClientReadyReport(generation.roast)) {
       console.error("[api/roast] evidence-backed generation incomplete", {
         url: normalizedUrl,
         generation: generation.roast.generation,
@@ -259,6 +262,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(toClientReportPayload(report, "fresh", { authExpired }));
   } catch (error) {
+    if (error instanceof AiUsageError) return NextResponse.json({ error: error.message, code: error.code }, {
+      status: error.status, headers: error.status === 429 ? { "Retry-After": "600" } : undefined,
+    });
     const message =
       error instanceof Error
         ? error.message

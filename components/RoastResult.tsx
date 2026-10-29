@@ -11,6 +11,7 @@ import {
   siteGoalLabel,
 } from "@/lib/diagnosis";
 import { buildImplementationBlueprint, toQuickFixLines } from "@/lib/implementationGuide";
+import { isClientReadyReport } from "@/lib/reportQuality";
 import { ScoreBadge } from "./ScoreBadge";
 
 type RoastResultProps = {
@@ -344,7 +345,7 @@ export function RoastResult({
     }
   })();
   const evidenceLines = uniqueReportLines(
-    [...roast.evidence, ...scoring.evidence],
+    isClientReadyReport(roast) ? roast.evidence : [...roast.evidence, ...scoring.evidence],
     subject,
     8,
   );
@@ -362,7 +363,7 @@ export function RoastResult({
     visualAudit && visualAudit.available ? visualAudit.summary : undefined;
   const claimContract = roast.claim_contract ?? [];
   const implementationBlueprint =
-    isUnlocked && scraped ? buildImplementationBlueprint(scraped, scoring) : null;
+    isUnlocked && scraped && !isClientReadyReport(roast) ? buildImplementationBlueprint(scraped, scoring) : null;
   const brutalTruths = uniqueReportLines(
     implementationBlueprint?.brutalTruths ?? [],
     subject,
@@ -374,16 +375,16 @@ export function RoastResult({
     : implementationBlueprint
       ? toQuickFixLines(implementationBlueprint, 4)
       : [];
-  const quickFixLines = uniqueReportLines(quickFixSource, subject, 4);
+  const quickFixLines = uniqueReportLines(quickFixSource, subject, isClientReadyReport(roast) ? 5 : 4);
   const diagnosis = roast.diagnosis;
   const firstImpression = cleanReportText(roast.first_impression, subject);
   const singleBiggestLeak = cleanReportText(roast.single_biggest_leak, subject);
   const lostCustomers = cleanReportText(roast.lost_customers, subject);
   const highImpact = cleanReportText(roast.high_impact, subject);
   const toneSummary = cleanReportText(roast.tone_summary, subject);
-  const roastLeadHeadline = roastHeadline(toneSummary, scoring);
-  const contextualRoast = contextualRoastLine(subject, scraped, scoring);
-  const parsedQuickFixes = quickFixLines.slice(0, 3).map(parseQuickFixLine);
+  const roastLeadHeadline = isClientReadyReport(roast) ? toneSummary : roastHeadline(toneSummary, scoring);
+  const contextualRoast = isClientReadyReport(roast) ? null : contextualRoastLine(subject, scraped, scoring);
+  const parsedQuickFixes = quickFixLines.slice(0, isClientReadyReport(roast) ? 5 : 3).map(parseQuickFixLine);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 rounded-3xl border border-white/10 bg-surface/85 p-6 shadow-2xl shadow-black/35 sm:p-10">
@@ -505,7 +506,7 @@ export function RoastResult({
                   {scoring.visualDesign.label}
                 </p>
               </div>
-            ) : null}
+            ) : <p className="text-sm text-muted">Visual design: not assessed.</p>}
           </div>
         </section>
       ) : (
@@ -536,13 +537,13 @@ export function RoastResult({
       {isUnlocked ? (
         <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
           <h2 className="text-xl font-black uppercase tracking-wide text-accent-soft">
-            Lost Customers
+            Possible Customer Friction
           </h2>
           <p className="mt-2 text-base text-white/90">{lostCustomers}</p>
         </section>
       ) : (
         <LockedSection
-          title="Lost Customers"
+          title="Possible Customer Friction"
           copy="Detailed leakage analysis is included in the full paid report."
         />
       )}
@@ -550,7 +551,7 @@ export function RoastResult({
       {isUnlocked ? (
         <section className="rounded-2xl border border-white/10 bg-black/20 p-5">
           <h2 className="text-xl font-black uppercase tracking-wide text-accent-soft">
-            3 Brutal Fixes
+            Priority Fixes
           </h2>
           <div className="mt-4 grid gap-3">
             {parsedQuickFixes.map((fix, index) => (
@@ -732,12 +733,12 @@ export function RoastResult({
             </ul>
           </div>
         </section>
-      ) : (
+      ) : !isUnlocked ? (
         <LockedSection
           title="Implementation Blueprint"
           copy="Unlock to get exact section-by-section changes, example copy, and a 7-day execution plan."
         />
-      )}
+      ) : null}
 
       {isUnlocked ? (
         <details className="rounded-2xl border border-white/10 bg-black/20 p-5">
@@ -930,6 +931,7 @@ export function RoastResult({
               </section>
             ) : null}
 
+            {roast.technicalChecks?.length ? <section aria-label="Technical review"><h2 className="text-sm font-black uppercase tracking-[0.15em] text-accent-soft">Technical Review</h2><p className="mt-2 text-sm text-white/70">Sampled HTML observations; not a speed, security or search-ranking certification.</p><div className="mt-3 space-y-3">{roast.technicalChecks.map(check => <article key={check.name} className="rounded-xl border border-white/15 p-4"><h3 className="font-semibold">{check.name} — {check.status.replace("_", " ")}</h3><p className="mt-1 text-sm text-white/75">{check.detail}</p></article>)}</div></section> : null}
             {scoring.findings.length > 0 ? (
               <section>
                 <h2 className="text-sm font-black uppercase tracking-[0.15em] text-accent-soft">

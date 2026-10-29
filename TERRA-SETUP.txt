@@ -1,0 +1,44 @@
+ROAST AI - GPT-5.6 TERRA SETUP (28 October 2026)
+
+Local configuration and code defaults now use Terra. The existing OpenAI key
+is unchanged. One live cost test has now been completed; see the notes below.
+
+IN ROAST AI VERCEL (website-roast-ai), not the Office project:
+  ROAST_AI_PROVIDER=openai
+  ROAST_AI_MODEL=gpt-5.6-terra
+  ROAST_AI_ALLOWED_MODELS=gpt-5.6-terra
+  OPENAI_MODEL=gpt-5.6-terra
+  ROAST_AI_MAX_RUN_USD=0.40
+  ROAST_AI_MAX_INPUT_BYTES=65000
+  ROAST_AI_ENABLED=0
+  ROAST_AI_ALLOW_LOCAL=0
+
+Keep OPENAI_API_KEY private and unchanged if it is current.
+OPENAI_MODEL is retained for compatibility; ROAST_AI_MODEL controls generation.
+Remove any older environment-specific model overrides as well.
+
+No new database migration is needed. Keep the existing roast_ai_runs table
+and reserve_roast_ai_run RPC from 20261015_ai_usage_limits.sql.
+
+One live text-evidence test completed on 28 October: 23,768 input tokens and
+2,350 output tokens across two calls. Estimated cost including reported cache
+writes: $0.087617, before tax/currency conversion. Quality review FAILED and
+the draft was withheld. No retry was made. Do not enable bulk scans until the
+accuracy issues are fixed. Full measurements are in the local tmp cost JSON.
+
+ESTIMATED COST POLICY
+Approved standard uncached rates: $2/million input, $12/million output tokens.
+Source: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+Max input: 65,000 UTF-8 bytes per request. Max outputs: writer 4,000 tokens,
+reviewer 800 tokens. At most two calls. No retries, images, tools, audio or
+automatic fallback. Terra reasoning is explicitly disabled and service tier
+fixed to default. Requests are forced to one completion.
+Cache writes are billed at 1.25x uncached input, or $2.50/million tokens.
+Conservative estimate including cache writes and framing: $0.38772; ceiling
+$0.40. Actual bills depend on usage, current provider rates, tax and currency.
+This guard is not a provider account-wide hard spending limit.
+
+The existing shared daily/monthly reservation budgets are unchanged and can
+stop scans before nominal attempt limits. Failed attempts retain reservations.
+Development remains limited to one live attempt per UTC day. Credit/billing
+availability is not proved by a successful model-list lookup.

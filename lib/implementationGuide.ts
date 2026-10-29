@@ -654,7 +654,7 @@ function brutalTruthsFromPenalties(context: GuideContext): string[] {
       case "No CTA Path":
       case "Weak CTA Path":
       case "Soft Visual CTA":
-      case "Weak Visual CTA":
+      case "CTA Heuristic Flag":
         truths.push(
           context.primaryCtaWasDetected
             ? `Your page behaves like a brochure, not a sales flow. "${context.primaryCta}" is present, but it is not driving action.`
@@ -663,7 +663,7 @@ function brutalTruthsFromPenalties(context: GuideContext): string[] {
               : `Your page behaves like a brochure, not a sales flow. No meaningful CTA was found, so "${context.primaryCta}" is the action path the page needs to grow teeth.`,
         );
         break;
-      case "No Trust Proof":
+      case "Trust Proof Not Observed":
       case "Trust-Led Visual Polish Gap":
         truths.push(
           `You are asking buyers to trust "${shortOffer(context.offerLabel)}" while showing ${proofPhrase(context)}.`,
@@ -680,9 +680,9 @@ function brutalTruthsFromPenalties(context: GuideContext): string[] {
         );
         break;
       case "Weak Visual Hierarchy":
-      case "Low Visual Readability":
+      case "Readability Heuristic Flag":
       case "Medium Readability Risk":
-      case "Distracting Motion":
+      case "Motion Heuristic Flag":
         truths.push(
           `The first screen leaks attention before the offer lands. Visual clarity is fighting your conversion path.`,
         );
@@ -765,7 +765,7 @@ function fixFromPenalty(
     case "No CTA Path":
     case "Weak CTA Path":
     case "Soft Visual CTA":
-    case "Weak Visual CTA":
+    case "CTA Heuristic Flag":
       return {
         title: `Make "${context.primaryCta}" impossible to miss`,
         where: "Hero section, mid-page checkpoint, and final CTA block",
@@ -785,7 +785,7 @@ function fixFromPenalty(
             ? `Button: "${context.primaryCta}" | Microcopy: "Free to start. Join a live Ludo match in seconds."`
             : `Button: "${context.primaryCta}" | Microcopy: "No pressure. Fast response within 1 business day."`,
       };
-    case "No Trust Proof":
+    case "Trust Proof Not Observed":
       return {
         title:
           context.niche === "mobile_game"
@@ -853,7 +853,7 @@ function fixFromPenalty(
         example:
           `"Unlike typical providers, we use [specific process] to deliver [specific measurable outcome] in [timeframe]."`,
       };
-    case "Low Visual Readability":
+    case "Readability Heuristic Flag":
     case "Medium Readability Risk":
       return {
         title: `Increase readability around "${context.primaryCta}"`,
@@ -882,7 +882,7 @@ function fixFromPenalty(
         example:
           "Hero order: Headline -> Subheadline -> Primary CTA -> Proof strip",
       };
-    case "Distracting Motion":
+    case "Motion Heuristic Flag":
       return {
         title: "Reduce motion that steals CTA attention",
         where: "Above-the-fold animated components",

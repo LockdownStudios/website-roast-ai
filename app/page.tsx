@@ -23,7 +23,7 @@ const steps = [
     detail: "Messaging clarity, trust, CTA strength, differentiation, and structure.",
   },
   {
-    title: "Get the roast instantly",
+    title: "Get your evidence-backed roast",
     detail: "Sharp truth. Actionable fixes. No polite filler.",
   },
 ];
@@ -44,7 +44,7 @@ const heroCopy: Record<
     titleBottom: "But It Is Probably",
     titleHighlightB: " Losing Customers.",
     subheadline:
-      "Get a brutally honest breakdown of what is actually hurting your conversions in 30 seconds.",
+      "Get a sharp, site-specific review of customer journeys, observed friction and practical fixes.",
   },
   B: {
     titleTop: "Your Homepage Is",
@@ -52,7 +52,7 @@ const heroCopy: Record<
     titleBottom: "Your Conversion Rate",
     titleHighlightB: " Is Not.",
     subheadline:
-      "Paste your URL and get the blunt truth about why visitors bounce without buying.",
+      "Paste your URL for a blunt, evidence-backed review of the pages and customer journeys we can inspect.",
   },
 };
 
@@ -129,14 +129,14 @@ export default function Home() {
               Roast Your Website
             </p>
             <p className="mt-2 text-sm text-white/80">
-              Paste your URL. We show what is killing conversion before the next visitor bounces.
+              Paste your URL. Get specific observations and practical next steps for your business.
             </p>
             <UrlInput
               className="mt-4"
               showLabel={false}
               placeholder="Enter your website URL..."
               buttonText="Roast My Website"
-              microcopy="No signup required. Instant results."
+              microcopy="No signup required. Scan time depends on the website."
               variant={variant}
               context="hero"
             />
@@ -234,7 +234,7 @@ export default function Home() {
           <span className="text-accent"> it is bleeding money.</span>
         </h2>
         <p className="mx-auto mt-4 max-w-3xl text-lg text-muted">
-          You could be losing 20-40% of potential customers just because your message is not clear.
+          Unclear messaging can make the next step harder. Find the friction supported by your site&apos;s evidence, not a made-up loss percentage.
         </p>
       </section>
 
@@ -248,7 +248,7 @@ export default function Home() {
           showLabel={false}
           placeholder="Enter your website URL..."
           buttonText="Roast My Website"
-          microcopy="No signup required. Instant results."
+          microcopy="No signup required. Scan time depends on the website."
           variant={variant}
           context="bottom"
         />

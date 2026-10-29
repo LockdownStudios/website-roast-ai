@@ -93,9 +93,13 @@ export function inferJourneyIntent(
 ): CustomerJourneyIntent {
   // Page headings describe other journeys too; only use them to disambiguate Book Now.
   const text = `${cta.label} ${cta.destination ?? ""}`.toLowerCase();
+  if (/\b(find|locate|contact)\b.*\b(dealer|distributor)\b|\/find-a-dealer/.test(text)) return "find_dealer";
+  if (/\b(find|choose|select)\b.*\b(location|branch|caf[eé])\b|\/locations(?:\/|$)/.test(text)) return "find_location";
+  if (/\b(get directions|directions|maps\.app\.goo\.gl|g\.page)\b/.test(text)) return "get_directions";
+  if (/\b(emergency|urgent|immediate assistance|24.hour)\b/.test(text)) return "urgent_help";
   if (/\b(add to cart|checkout|buy now|shop now|order now|purchase)\b/.test(text)) return "purchase";
   if (/\b(reserve (?:a )?table|table reservation|book (?:a )?table)\b/.test(text)) return "reserve_table";
-  if (/\b(view|see|download) (?:the )?menu\b/.test(text)) return "view_menu";
+  if (/\b(view|see|download|classic|breakfast|dinner) (?:the )?menu\b|\/the-classic-menu\//.test(text)) return "view_menu";
   if (/\b(check availability|book direct|book your stay|room booking|accommodation booking)\b/.test(text)) return "book_stay";
   if (/\b(request|get) (?:a )?quote|estimate|proposal\b/.test(text)) return "request_quote";
   if (/\b(book|schedule) (?:a )?(?:consultation|consult|call)\b|\bfree consultation\b/.test(text)) return "book_consultation";
@@ -104,8 +108,8 @@ export function inferJourneyIntent(
   if (/\b(start|try|begin) (?:a )?(?:free )?trial\b/.test(text)) return "start_trial";
   if (/\bapply now|submit application\b/.test(text)) return "apply";
   if (/\bcall now|call us|phone|tel:|whatsapp\b/.test(text)) return "call";
-  if (/\bcontact|send message|get in touch|talk to us|speak to\b/.test(text)) return "contact";
-  if (/\bbook now\b/.test(text)) {
+  if (/\bcontact|kontak ons|send message|get in touch|talk to us|speak to\b/.test(text)) return "contact";
+  if (/\b(book now|make a booking|bespreek|beskikbaarheid)\b/.test(text)) {
     const context = pageText.toLowerCase();
     if (/\b(salon|treatment|beauty|appointment)\b/.test(context)) return "book_appointment";
     if (/\b(room|stay|suite|hotel|lodge|resort|accommodation|chalet|chalets|camping)\b/.test(context)) return "book_stay";

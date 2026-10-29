@@ -1,3 +1,4 @@
+export type TechnicalCheck = { name: string; status: "observed" | "review" | "not_tested"; detail: string; pageUrls: string[] };
 export type VisualHints = {
   aboveFoldCtaLikely: boolean;
   heroHeadingEarly: boolean;
@@ -73,6 +74,7 @@ export type CrawlCoverage = {
 };
 
 export type CrawlSummary = {
+  aliases?: Array<{ url: string; canonicalUrl: string }>;
   strategy: CrawlStrategy;
   pageCount: number;
   visitedUrls: string[];
@@ -105,6 +107,8 @@ export type VisualViewportMetrics = {
   autoplayMediaCount: number;
   screenshotHash?: string;
   screenshotDataUrl?: string;
+  interactionNotes?: string[];
+  captureReadiness?: { settled: boolean; waitedMs: number; reasons: string[] };
 };
 
 export type VisualSummaryScores = {
@@ -171,6 +175,10 @@ export type CustomerJourneyIntent =
   | "contact"
   | "view_menu"
   | "learn"
+  | "find_dealer"
+  | "find_location"
+  | "get_directions"
+  | "urgent_help"
   | "unknown";
 
 export type CustomerJourney = {
@@ -196,6 +204,7 @@ export type BusinessProfile = {
 };
 
 export type ScrapedWebsiteData = {
+  technicalChecks?: TechnicalCheck[];
   url: string;
   title: string;
   description: string;
@@ -341,7 +350,9 @@ export type RoastClaim = {
 };
 
 export type RoastGenerationMetadata = {
+  review?: { version: string; passed: boolean; issues: string[]; checkedAt: string };
   mode: "ai" | "hybrid" | "fallback";
+  provider?: "openai" | "deepseek";
   model?: string;
   reason?: "model_unavailable" | "model_error" | "validation_failed";
   validationIssues?: string[];
@@ -419,6 +430,9 @@ export type RoastDiagnosis = {
 };
 
 export type RoastResultPayload = {
+  findings?: import("./pairedFindings").PairedFinding[];
+  technicalChecks?: TechnicalCheck[];
+  outreach?: OutreachAudit;
   contractVersion?: string;
   score: number;
   score_label: ScoreLabel;
@@ -434,6 +448,17 @@ export type RoastResultPayload = {
   claim_contract?: RoastClaim[];
   generation?: RoastGenerationMetadata;
   access?: ReportAccess;
+};
+
+export type OutreachAudit = {
+  technicalChecks?: TechnicalCheck[];
+  summary: string;
+  strengths: string[];
+  recommendation: "small improvements" | "targeted refresh" | "substantial remodel";
+  recommendationReason: string;
+  findings: { headline?: string; category: "visual" | "navigation" | "interaction" | "content" | "technical"; observed: string; pageUrl: string; consequence: string; fix: string; evidence: string; imageIndex: number | null }[];
+  images: { label: string; sourceUrl: string; dataUrl: string }[];
+  scope: string;
 };
 
 export type StoredRoastReport = {
