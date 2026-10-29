@@ -33,9 +33,27 @@ export async function waitForVisualReadiness(timeoutMs: number): Promise<VisualR
     const loaders = document.querySelectorAll('.preloader, #preloader, .page-loader, #page-loader, .loading-screen, [aria-busy="true"]');
     if ([...loaders].some(element => {
       if (!visible(element)) return false;
-      const rect = element.getBoundingClientRect();
-      const parentRect = element.parentElement?.getBoundingClientRect();
-      return rect.width * rect.height > width * height * 0.2 || Boolean(parentRect && parentRect.width * parentRect.height > width * height * 0.8);
+      // A small spinner inside a large body/main is not a page overlay.
+      // Only inherit coverage from an actual positioned overlay wrapper.
+      let surface = element;
+      for (let node = element.parentElement; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+        if (["fixed", "absolute"].includes(getComputedStyle(node).position)) {
+          surface = node;
+          break;
+        }
+      }
+      const style = getComputedStyle(surface);
+      const namedLoader = element.matches('.preloader, #preloader, .page-loader, #page-loader, .loading-screen');
+      if (!namedLoader && !["fixed", "absolute"].includes(style.position)) return false;
+      const rect = surface.getBoundingClientRect();
+      const left = Math.max(0, rect.left), top = Math.max(0, rect.top);
+      const right = Math.min(width, rect.right), bottom = Math.min(height, rect.bottom);
+      if (Math.max(0, right - left) * Math.max(0, bottom - top) <= width * height * 0.2) return false;
+      // Retained loader elements behind the finished content are not occluding it.
+      return [0.25, 0.5, 0.75].some(fraction => {
+        const hit = document.elementFromPoint(left + (right - left) * fraction, top + (bottom - top) * fraction);
+        return Boolean(hit && (hit === surface || surface.contains(hit)));
+      });
     })) reasons.push("Loading overlay remains visible");
     const anchors = [...document.querySelectorAll('h1, h2, main, header, [role="main"]')].filter(visible).slice(0, 12);
     const signature = [document.documentElement.scrollHeight, ...anchors.flatMap(element => {

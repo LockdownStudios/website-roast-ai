@@ -22,6 +22,14 @@ async function main() {
     assert.ok(delayed.waitedMs >= 1400);
     const hidden = await check(content + '<div id="preloader" style="display:none">Loading</div>');
     assert.equal(hidden.settled, true, "Hidden loaders must not invalidate a finished page");
+    const inlineSpinner = await check('<main style="min-height:150vh"><h1>Finished website</h1><span class="preloader" style="display:inline-block;width:20px;height:20px">...</span></main>');
+    assert.equal(inlineSpinner.settled, true, "A small inline spinner must not inherit its full-page parent's area");
+    const busyMain = await check('<main aria-busy="true" style="min-height:150vh"><h1>Finished content</h1><a href="/contact">Contact</a></main>');
+    assert.equal(busyMain.settled, true, "A busy content region is not automatically an overlay");
+    const wrappedLoader = await check(content + '<div style="position:fixed;inset:0;background:white;z-index:99"><span class="preloader" style="display:inline-block;width:20px;height:20px">...</span></div>');
+    assert.equal(wrappedLoader.settled, false, "A real blocking wrapper containing a tiny spinner must still block");
+    const behindContent = await check('<div id="preloader" style="position:fixed;inset:0;background:white;z-index:0">Loading</div><main style="position:relative;z-index:1;background:white;min-height:150vh"><h1>Finished content</h1></main>');
+    assert.equal(behindContent.settled, true, "A loader retained behind finished content is not blocking");
     const broken = await check(content + '<img src="data:image/png;base64,broken" width="200" height="200">');
     assert.equal(broken.settled, false);
     assert.ok(broken.reasons.includes("Visible image failed to load"));
