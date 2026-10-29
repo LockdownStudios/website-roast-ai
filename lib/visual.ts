@@ -47,6 +47,7 @@ type PageLike = {
     quality: number;
     fullPage: boolean;
     timeout?: number;
+    animations?: "disabled" | "allow";
   }) => Promise<Buffer>;
 };
 
@@ -621,7 +622,9 @@ async function analyzeViewport(
       quality: 58,
       fullPage: false,
       timeout: 12_000,
+      animations: "disabled",
     });
+    interactionNotes.push("Paused ongoing animations for the still capture; the screenshot does not establish motion or scrolling behaviour.");
     note("screenshot");
 
     return {
