@@ -33,6 +33,7 @@ type BrowserContextLike = {
 };
 
 type PageLike = {
+  bringToFront: () => Promise<void>;
   goto: (
     url: string,
     options: { waitUntil: "domcontentloaded"; timeout: number },
@@ -701,7 +702,10 @@ export async function analyzeVisualSignals(
     // serverless renderer even after both DOMs have settled.
     let captureQueue = Promise.resolve();
     const captureScreenshot = (page: PageLike) => {
-      const capture = captureQueue.then(() => page.screenshot({ type: "jpeg", quality: 58, fullPage: false, timeout: 20_000, animations: "disabled" }));
+      const capture = captureQueue.then(async () => {
+        await page.bringToFront();
+        return page.screenshot({ type: "jpeg", quality: 58, fullPage: false, timeout: 20_000, animations: "disabled" });
+      });
       captureQueue = capture.then(() => undefined, () => undefined);
       return capture;
     };
