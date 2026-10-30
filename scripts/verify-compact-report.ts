@@ -11,7 +11,9 @@ async function main() {
     findings: Array.from({ length: 5 }, (_, index) => ({ headline: `Finding ${index + 1}: give the next step some context.`, observation: "An observed layout decision needs clearer explanation.", consequence: "Guests may need another step to decide.", fix: `Fix ${index + 1}: explain the existing action with verified information.`, source: "example.com/rooms" })),
   };
   const pdf = await renderCompactReportPdf(report, true);
-  assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 2);
+  assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1,'Compact fixture should fit a single page');
+  const longer=await renderCompactReportPdf({...report,findings:report.findings.map(finding=>({...finding,observation:('An observed layout decision needs clearer explanation. ').repeat(15)}))});
+  assert.equal((longer.toString('latin1').match(/\/Type \/Page\b/g)||[]).length,2,'Longer copy must keep its readable second page');
   assert.ok(!pdf.toString("latin1").includes("/Subtype /Image"), "No screenshots in client documents.");
   const short = await renderCompactReportPdf({ ...report, findings: [report.findings[0]] });
   assert.equal((short.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1, "Short reports should not force an empty second page");

@@ -1,0 +1,73 @@
+.scanner{max-width:1000px;margin:40px auto;padding:28px;color:#f3f4f6;background:#090d14;border:1px solid #334155;border-radius:18px;font:15px/1.6 Arial,sans-serif}
+.scanner textarea{padding:14px;color:white;background:#151d2a;border:1px solid #475569;border-radius:8px;flex:1;min-width:160px}
+.scanner button{padding:12px 18px;border-radius:8px;background:#fc7925;color:#10141c;border:0;cursor:pointer;font-weight:bold}
+.scanner button:disabled{opacity:.5;cursor:default}
+.scan-preview{position:relative;overflow:hidden;border:1px solid #334155;border-radius:12px;margin:20px 0;max-height:330px}
+.scan-preview img{width:100%;display:block}
+.scan-sweep{position:absolute;inset:0;background:linear-gradient(transparent 40%,#ff873555 50%,transparent 60%);animation:sweep 3s linear infinite}
+.scan-stage,.scan-card{padding:16px;background:#131b27;border:1px solid #334155;border-radius:10px;margin:10px 0}
+.scan-scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.scan-card strong{display:block;font-size:30px;color:#fc9c55}
+.scanner progress{width:100%;accent-color:#fc7925}
+.scanner a{color:#ffac70}
+.scan-error{color:#ffb4a9}
+@keyframes sweep{from{transform:translateY(-100%)}
+to{transform:translateY(100%)}
+}
+@media(prefers-reduced-motion:reduce){.scan-sweep{animation:none;background:none}
+}
+
+.scanner{width:calc(100% - 24px);box-sizing:border-box}
+
+.scanner h1{font-size:28px;font-weight:700;line-height:1.2;margin:0 0 10px}
+
+.scanner h2{font-size:23px;font-weight:700;margin:26px 0 10px}
+
+.scanner h3{font-size:17px;font-weight:700;margin:18px 0 10px}
+
+.scanner p{margin:10px 0;color:#cbd5e1}
+
+.scanner code{overflow-wrap:anywhere}
+
+.scanner form{align-items:flex-start;margin:20px 0}
+
+.scanner form label{font-size:13px;color:#cbd5e1}
+
+.scanner select{display:block;padding:8px;background:#151d2a;color:#f3f4f6;border:1px solid #475569;border-radius:6px}
+
+.scanner button{margin:4px 6px 4px 0;background:#182335;border:1px solid #46505e;color:#f6f7fb}
+
+.scanner form button{background:#fc7925;color:#10141c;border:1px solid #fc7925}
+
+.scan-stage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+
+.scan-stage-grid .scan-stage{margin:0;padding:12px}
+
+.scan-stage[data-state=complete]{border-left:3px solid #4aaa93}
+
+.scan-stage[data-state=unavailable]{border-left:3px solid #d6a84b}
+
+.scan-progress summary{cursor:pointer;margin:18px 0 10px;font-weight:700}
+
+.scanner progress{appearance:none;height:8px;margin-top:16px;border:0;border-radius:8px;background:#334155}
+
+.scanner progress::-webkit-progress-bar{background:#334155;border-radius:8px}
+
+.scanner progress::-webkit-progress-value{background:#fc7925;border-radius:8px}
+
+.scanner progress::-moz-progress-bar{background:#fc7925;border-radius:8px}
+
+@media(max-width:600px){.scanner{padding:20px;margin:20px auto}
+.scan-stage-grid{grid-template-columns:1fr}
+.scanner textarea{min-width:100%;box-sizing:border-box}
+}
+
+
+.scanner fieldset{border:1px solid #334155;border-radius:10px;padding:16px;margin:20px 0}
+.scan-candidates{max-height:300px;overflow:auto}
+.scan-candidates label{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #263346}
+.scan-candidates small{display:block;color:#9aa5b7;overflow-wrap:anywhere}
+
+.scanner pre{overflow:auto;max-width:100%;font-size:12px;padding:12px;background:#131b27}
+.scanner dl div{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}
+.scanner dt{overflow-wrap:anywhere}.scanner dd{font-weight:700;color:#ffd7b2}

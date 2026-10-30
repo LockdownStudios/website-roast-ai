@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import {parseLighthouse} from '../lib/scan-v2/measurement';
+import {overallScore,WEIGHTS,type ScanJob} from '../lib/scan-v2/contract';
+import {processScan} from '../lib/scan-v2/processor';
+import {publicAddress} from '../lib/scan-v2/url';
+import {GET} from '../app/api/scans/route';
+import {NextRequest} from 'next/server';
+import {readFileSync} from 'node:fs';
+import {STUDIO_CATEGORIES,studioScorecard,validateStudioAssessments,studioDisplayReason} from '../lib/scan-v2/rubric';
+import {resolveOutreachCitations} from '../lib/outreachContract';
+async function main(){
+ const technical=parseLighthouse({lighthouseResult:{finalUrl:'https://example.com/',lighthouseVersion:'fixture',categories:{performance:{score:.9,auditRefs:[{id:'a',weight:1}]},seo:{score:null}},audits:{a:{score:0,title:'Measured finding'},'largest-contentful-paint':{numericValue:2400}}}},'mobile');
+ assert.equal(technical.scores.performance,90);assert.equal(technical.scores.seo,null);assert.equal(technical.scores.accessibility,null);assert.equal(technical.issues.length,1);assert.equal(technical.metrics['largest-contentful-paint'],2400);
+ assert.throws(()=>parseLighthouse({lighthouseResult:{runtimeError:{message:'blocked'}}},'mobile'),/blocked/);
+ assert.equal(overallScore({performance:90}),null);
+ assert.equal(overallScore(Object.fromEntries(Object.keys(WEIGHTS).map(key=>[key,80]))),80);
+ const assessment=resolveOutreachCitations({findings:[],studioAssessments:STUDIO_CATEGORIES.map(category=>({category,level:3,reason:'Observed scoped evidence.',imageIndex:category==='mobile'?1:0}))},{pages:[],entries:[]},[0,1].map(()=>({label:'Fixture',sourceUrl:'https://example.com/',dataUrl:'data:image/jpeg;base64,YQ=='}))).studioAssessments!;
+ validateStudioAssessments(assessment);
+ assert.equal(studioDisplayReason('The search is clear. The second sentence is trun'),'The search is clear.');
+ assert.equal(studioDisplayReason('Clear search and readable labels'),'Clear search and readable labels');
+ assert.equal(studioDisplayReason('Clear labels. However, the menu is crowded.'),'Clear labels. However, the menu is crowded.');
+ const scored=studioScorecard(assessment,[{...technical,scores:{performance:80,seo:80,accessibility:80,'best-practices':80}}]);assert.equal(scored.overall,77);
+ assert.throws(()=>validateStudioAssessments(assessment.map(item=>({...item,category:'design'}))),/exactly once/);
+ assert.throws(()=>validateStudioAssessments(assessment.map(item=>item.category==='mobile'?{...item,imageIndex:0}:item)),/mobile screenshot/);
+ assert.equal(studioScorecard(assessment.map(item=>item.category==='trust'?{...item,level:null}:item),[technical]).overall,null);
+ for(const ip of ['127.0.0.1','10.0.0.1','192.168.1.1','169.254.169.254','::1','::ffff:127.0.0.1','fd00::1'])assert.equal(publicAddress(ip),false,ip);
+ const job:ScanJob={id:'00000000-0000-4000-8000-000000000001',owner_id:'office:00000000-0000-4000-8000-000000000002',channel:'office',url:'https://example.com/',profile:'outreach',status:'running',stages:{},checkpoint:{},result:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),lease_token:'00000000-0000-4000-8000-000000000003',ai_started:false,cancel_requested:false};
+ const env={...process.env},original=globalThis.fetch;
+ try{
+  process.env.ROAST_V2_AI_ENABLED='0';
+  await processScan(job,{validate:async url=>String(url),collect:async()=>{throw new Error('fetch failed');},measure:async()=>technical,save:async(target,patch)=>{Object.assign(target,patch);}});
+  assert.equal(job.status,'partial');assert.equal(job.result?.technical[0].scores.performance,90);assert.equal(job.result?.overall,null);assert.equal(job.ai_started,false);assert.equal(Object.keys(job.stages).length,6);
+  const interrupted:ScanJob={...job,stages:{},checkpoint:{},result:null,ai_started:false};
+  const fixture=JSON.parse(readFileSync('fixtures/roast-report-sample.json','utf8'));
+  let measurements=0;
+  await processScan(interrupted,{validate:async url=>String(url),collect:async()=>fixture.scraped,capture:async()=>{throw new Error('browser failed');},measure:async()=>{measurements++;return technical;},save:async(target,patch)=>{Object.assign(target,patch);}});
+  assert.equal(interrupted.status,'partial');assert.equal(interrupted.stages.visual?.status,'unavailable');assert.equal(measurements,1,'A browser failure must not cancel the independent audit');
+  await processScan(interrupted,{validate:async url=>String(url),capture:async()=>({available:false,reason:'unavailable',sampledAt:new Date().toISOString(),findings:[],evidence:[]}),collect:async()=>{throw new Error('must reuse collection');},measure:async()=>{throw new Error('must reuse measurement');},save:async(target,patch)=>{Object.assign(target,patch);}});
+  assert.equal(interrupted.stages.mobile?.status,'complete','Checkpoint recovery must restore the completed measurement stage');
+  process.env.OFFICE_ROAST_API_SECRET='test-secret';process.env.SUPABASE_URL='https://storage.test';process.env.SUPABASE_SERVICE_ROLE_KEY='fake';
+  globalThis.fetch=async()=>Response.json([{...job,owner_id:'office:00000000-0000-4000-8000-999999999999',checkpoint:{secret:'must never escape'}}]);
+  const request=new NextRequest(`https://scanner.test/api/scans?id=${job.id}`,{headers:{Authorization:'Bearer test-secret','x-office-owner':'00000000-0000-4000-8000-000000000002'}});
+  const denied=await GET(request);assert.equal(denied.status,404);assert.ok(!(await denied.text()).includes('secret'));
+  const publicDenied=await GET(new NextRequest(`https://scanner.test/api/scans?id=${job.id}`));assert.equal(publicDenied.status,401);
+  const unicodeDenied=await GET(new NextRequest(`https://scanner.test/api/scans?id=${job.id}`,{headers:{Authorization:`Bearer ${'ü'.repeat(11)}`}}));assert.equal(unicodeDenied.status,401,'Credential comparison must compare bytes safely');
+  globalThis.fetch=async()=>Response.json([job]);
+  const allowed=await GET(request);assert.equal(allowed.status,200);const body=await allowed.json();assert.equal(body.checkpoint,undefined);assert.equal(body.owner_id,undefined);
+  console.log('V2 checks passed: real-measurement parsing, unknown scores, weighted rubric, private-target rejection, partial-result retention, complete stage outcomes, and cross-owner isolation. No live AI calls.');
+ }finally{globalThis.fetch=original;for(const key of Object.keys(process.env))if(!(key in env))delete process.env[key];Object.assign(process.env,env);}
+}
+void main().catch(error=>{console.error(error);process.exitCode=1;});

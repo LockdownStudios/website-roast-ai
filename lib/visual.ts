@@ -1,4 +1,5 @@
 import { browserLaunchOptions, withBrowserSlot } from "./browserRuntime";
+import {guardBrowserContext} from './scan-v2/network';
 import "server-only";
 import { createHash } from "node:crypto";
 import { waitForVisualReadiness } from "./visualReadiness";
@@ -312,6 +313,7 @@ async function analyzeViewport(
     userAgent: preset.userAgent,
   });
   note("context");
+  await guardBrowserContext(context);
 
   try {
     const page = await context.newPage();

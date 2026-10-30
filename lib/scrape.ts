@@ -1,4 +1,5 @@
 import { browserLaunchOptions, withBrowserSlot } from "./browserRuntime";
+import {guardBrowserContext} from './scan-v2/network';
 import { pageUrlKey, deduplicatePages } from "./pageAliases";
 import { technicalChecksFromHtml } from "./technicalAudit";
 import type {
@@ -1240,6 +1241,7 @@ async function renderHtmlWithBrowserInSlot(url: string): Promise<string | null> 
     });
 
     try {
+      await guardBrowserContext(context);
       const page = await context.newPage();
       await page.goto(url, {
         waitUntil: "domcontentloaded",

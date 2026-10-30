@@ -1,0 +1,10 @@
+.git
+.vercel
+.next
+node_modules
+.env*
+tmp
+output
+.codex
+.agents
+*.log

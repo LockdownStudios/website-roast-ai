@@ -451,6 +451,7 @@ export type RoastResultPayload = {
 };
 
 export type OutreachAudit = {
+  studioAssessments?: import('./scan-v2/rubric').StudioAssessment[];
   technicalChecks?: TechnicalCheck[];
   summary: string;
   strengths: string[];

@@ -19,6 +19,12 @@ async function main() {
       assert.match(reservation.p_model, /^(openai|deepseek):/);
       return Response.json({ allowed: !denial });
     }
+    if(address==='https://ledger.test/rest/v1/roast_ai_runs'&&init?.method==='POST'){
+      const reservation=JSON.parse(String(init.body));
+      assert.equal(reservation.channel,'office');
+      assert.match(reservation.model,/^(openai|deepseek):/);
+      return new Response(null,{status:201});
+    }
     if (address.startsWith("https://ledger.test/rest/v1/roast_ai_runs?")) {
       finalUsage = JSON.parse(String(init?.body));
       return new Response(null, { status: 204 });
@@ -57,7 +63,7 @@ async function main() {
     await capped.finish("failed");
     const before = sent.length;
     denial = true;
-    await assert.rejects(reserveAiRun({ channel: "office" }, "https://example.com"), /allowance/);
+    await assert.rejects(reserveAiRun({ channel: "development" }, "https://example.com"), /allowance/);
     denial = false;
     delete process.env.DEEPSEEK_API_KEY;
     assert.throws(() => aiProviderCredentials("deepseek"), /DEEPSEEK_API_KEY/);

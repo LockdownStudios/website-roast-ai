@@ -1,11 +1,13 @@
 import { normalizeTechnicalChecks } from "./technicalAudit";
 import type { OutreachAudit } from "./types";
+import {studioAssessmentSchema,validateStudioAssessments} from './scan-v2/rubric';
 
 export const MIN_OUTREACH_FINDINGS = 1;
 export const OUTREACH_CONTRACT_VERSION = "outreach-v2";
 
 export function parseOutreach(value: unknown): OutreachAudit {
   const audit = value as OutreachAudit;
+  if (audit?.studioAssessments) validateStudioAssessments(audit.studioAssessments);
   if (audit?.technicalChecks) normalizeTechnicalChecks(audit.technicalChecks);
   const text = (value: unknown, max: number) => typeof value === "string" && !!value.trim() && value.length <= max;
   if (!audit || !text(audit.summary, 450) || !text(audit.recommendationReason, 350) || !text(audit.scope, 700) || !["small improvements", "targeted refresh", "substantial remodel"].includes(audit.recommendation)) throw new Error("Invalid outreach summary, scope or recommendation.");
@@ -35,8 +37,9 @@ export const outreachResponseFormat = { type: "json_schema", json_schema: { name
   }, required: ["summary", "strengths", "recommendation", "recommendationReason", "findings"]
 } } };
 
-export function resolveOutreachCitations(raw: { findings: Array<Record<string, unknown>> }, catalog: { pages: string[]; entries: Array<[string, string, number[]]> }, images: OutreachAudit["images"]) {
-  return { ...raw, findings: raw.findings.map(finding => {
+export function resolveOutreachCitations(raw: { findings: Array<Record<string, unknown>>; studioAssessments?: Array<Record<string,unknown>> }, catalog: { pages: string[]; entries: Array<[string, string, number[]]> }, images: OutreachAudit["images"]) {
+  const resolve = (finding:Record<string,unknown>) => {
+    if ('level' in finding && finding.level === null) return {...finding, pageUrl:undefined, evidence:undefined};
     if (finding.imageIndex === 0 || finding.imageIndex === 1) return { ...finding, pageUrl: images[finding.imageIndex].sourceUrl, evidence: `${images[finding.imageIndex].label}; imageIndex=${finding.imageIndex} (zero-based).` };
     const entryIndex = typeof finding.evidenceId === "string" && /^e(?:0|[1-9]\d*)$/.test(finding.evidenceId) ? Number(finding.evidenceId.slice(1)) : NaN;
     const pageIndex = typeof finding.pageId === "string" && /^p(?:0|[1-9]\d*)$/.test(finding.pageId) ? Number(finding.pageId.slice(1)) : NaN;
@@ -44,5 +47,9 @@ export function resolveOutreachCitations(raw: { findings: Array<Record<string, u
     const entry = catalog.entries[entryIndex as number];
     if (!entry || !entry[2].includes(pageIndex as number)) throw new Error("Citation refers to evidence from a different page.");
     return { ...finding, evidence: entry[1].slice(0, 180), pageUrl: catalog.pages[pageIndex as number] };
-  }) };
+  };
+  return { ...raw, findings:raw.findings.map(resolve), ...(raw.studioAssessments ? {studioAssessments:raw.studioAssessments.map(resolve)} : {}) };
 }
+
+export const outreachStudioSchema = {...outreachResponseFormat.json_schema.schema, properties:{...outreachResponseFormat.json_schema.schema.properties,studioAssessments:studioAssessmentSchema},required:[...outreachResponseFormat.json_schema.schema.required,'studioAssessments']};
+export const outreachStudioFormat = {...outreachResponseFormat,json_schema:{...outreachResponseFormat.json_schema,schema:outreachStudioSchema}};
