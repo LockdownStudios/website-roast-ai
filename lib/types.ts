@@ -451,6 +451,8 @@ export type RoastResultPayload = {
 };
 
 export type OutreachAudit = {
+  /** Server-stamped writing-policy version; never a substitute for evidence review. */
+  editorialVersion?: string;
   studioAssessments?: import('./scan-v2/rubric').StudioAssessment[];
   technicalChecks?: TechnicalCheck[];
   summary: string;

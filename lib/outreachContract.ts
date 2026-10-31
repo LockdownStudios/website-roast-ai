@@ -3,7 +3,7 @@ import type { OutreachAudit } from "./types";
 import {studioAssessmentSchema,validateStudioAssessments} from './scan-v2/rubric';
 
 export const MIN_OUTREACH_FINDINGS = 1;
-export const OUTREACH_CONTRACT_VERSION = "outreach-v2";
+export const OUTREACH_CONTRACT_VERSION = "outreach-v3";
 
 export function parseOutreach(value: unknown): OutreachAudit {
   const audit = value as OutreachAudit;

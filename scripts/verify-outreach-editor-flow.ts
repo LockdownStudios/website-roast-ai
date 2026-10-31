@@ -4,6 +4,7 @@ import { generateOutreachAudit } from "../lib/outreach";
 import { scoreWebsite } from "../lib/scoring";
 import { isClientReadyReport } from "../lib/reportQuality";
 import {STUDIO_CATEGORIES,studioScorecard} from '../lib/scan-v2/rubric';
+import { ROAST_VOICE_BRIEF, ROAST_EDITOR_INSTRUCTION, ROAST_VOICE_VERSION } from '../lib/roastVoice';
 async function main() {
   const env={...process.env}, original=globalThis.fetch;
   let calls=0;
@@ -19,6 +20,9 @@ async function main() {
     assert.equal(String(url),'https://api.openai.com/v1/chat/completions');
     calls++;
     const body=JSON.parse(String(init?.body));
+    const instructions=body.messages.filter((message:{role:string})=>message.role==='system').map((message:{content:string})=>message.content).join('\n');
+    assert.ok(instructions.includes(ROAST_VOICE_BRIEF),'Writer and editor must use the same editorial direction');
+    if(calls===2)assert.ok(instructions.includes(ROAST_EDITOR_INSTRUCTION),'The final editor must actively restore voice when a draft is bland');
     assert.equal(body.response_format.json_schema.name,calls===1?'website_outreach_mini_audit':'reviewed_outreach');
     const scores=withStudio?{studioAssessments:studio.map(item=>({...item,level:calls===2&&item.category==='design'?2:item.level}))}:{};
     return Response.json({usage:{prompt_tokens:9000,completion_tokens:650},choices:[{finish_reason:'stop',message:{content:JSON.stringify(calls===1?{...draft,...scores}:{evidenceSupported:true,businessAppropriate:true,scopeHonest:true,actionsUseful:true,issues:[],approvedAudit:{...final,...scores}})}}]});
@@ -31,6 +35,7 @@ async function main() {
     assert.equal(result.roast.first_impression,final.summary);
     assert.equal(result.roast.mistakes[0],final.findings[0].observed);
     assert.equal(result.roast.outreach?.findings[0].observed,final.findings[0].observed);
+    assert.equal(result.roast.outreach?.editorialVersion,ROAST_VOICE_VERSION);
     calls=0;withStudio=true;
     const graded=await generateOutreachAudit(scraped,scoreWebsite(fixture.scraped),{channel:'office'},{studio:true});
     assert.equal(calls,2,'Studio grading must share the writer/editor calls');

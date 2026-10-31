@@ -4,6 +4,7 @@ import { reusableOfficeReport } from "../lib/officeRoastCache";
 import { withBrowserSlot } from "../lib/browserRuntime";
 import { REPORT_REVIEW_VERSION } from "../lib/reportQuality";
 import type { OutreachAudit, StoredRoastReport } from "../lib/types";
+import { ROAST_VOICE_VERSION } from "../lib/roastVoice";
 
 async function main() {
   const image = { label: "Desktop homepage", sourceUrl: "https://example.com/", dataUrl: "data:image/jpeg;base64,YQ==" };
@@ -13,15 +14,18 @@ async function main() {
   const catalog = {pages:[image.sourceUrl],entries:[["heading","Exact title",[0]]] as Array<[string,string,number[]]>};
   const edited = resolveEditedOutreach(checks, original, catalog);
   assert.equal(edited.review.passed,true);
+  assert.equal(edited.audit.editorialVersion,ROAST_VOICE_VERSION);
   assert.notEqual(edited.audit.findings[0].observed,original.findings[0].observed,"Use the edited copy, not the rejected draft");
   assert.equal(edited.audit.images,original.images,"Editor cannot replace captured evidence");
   assert.throws(()=>resolveEditedOutreach({...checks,approvedAudit:null},original,catalog),/complete final report/);
   assert.throws(()=>resolveEditedOutreach({...checks,approvedAudit:{...raw,findings:[{...raw.findings[0],imageIndex:null,evidenceId:'e99',pageId:'p0'}]}},original,catalog),/different page/);
   const rejected = resolveEditedOutreach({...checks,evidenceSupported:false,approvedAudit:null,issues:[{field:'/report/outreach/summary',quote:original.summary,reason:'Unsupported interpretation.'}]},original,catalog);
   assert.equal(rejected.review.passed,false,"Unfixable evidence must never be approved");
+  assert.equal(rejected.audit.editorialVersion,undefined,"Rejected copy must not receive the new editorial stamp");
   const now = Date.now();
   const report = {url:image.sourceUrl,createdAt:new Date(now-1000).toISOString(),roast:{outreach:edited.audit,contractVersion:'2026-09-v1',access:{tier:'full_unlocked',unlockSource:'office',priceZar:49},generation:{mode:'ai',review:{version:REPORT_REVIEW_VERSION,passed:true,issues:[],checkedAt:new Date(now).toISOString()}},claim_contract:[{claim:'Observed',source:'visual',evidence:'Capture',severity:'medium'}]}} as unknown as StoredRoastReport;
   assert.equal(reusableOfficeReport(report,image.sourceUrl,now),true);
+  assert.equal(reusableOfficeReport({...report,roast:{...report.roast,outreach:{...edited.audit,editorialVersion:undefined}}},image.sourceUrl,now),false,"Older informative copy stays readable but cannot mask a new roast request through the cache");
   assert.equal(reusableOfficeReport({...report,createdAt:new Date(now-7*3600000).toISOString()},image.sourceUrl,now),false);
   assert.equal(reusableOfficeReport(report,'https://other.test/',now),false);
   assert.equal(reusableOfficeReport({...report,roast:{...report.roast,generation:{...report.roast.generation!,mode:'hybrid'}}},image.sourceUrl,now),false);

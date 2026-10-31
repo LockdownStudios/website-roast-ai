@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { outreachReportPresentation } from "../lib/reportPresentation";
 import { renderCompactReportHtml } from "../lib/compactReportHtml";
 import type { OutreachAudit } from "../lib/types";
+import type { CompactReport } from "../lib/compactReportPdf";
+import { ROAST_VOICE_VERSION } from "../lib/roastVoice";
 
 const audit: OutreachAudit = { summary: "The next decision needs a chair at this hero's table.", strengths: ["A clear consultation route."], recommendation: "small improvements", recommendationReason: "Keep the identity; tighten the mobile opening.", scope: "Homepage desktop/mobile sampled; no form submission.", images: [0, 1].map(i => ({ label: i ? "Mobile" : "Desktop", sourceUrl: "https://example.test/", dataUrl: "data:image/jpeg;base64,YQ==" })), findings: [{ headline: "The hero has room for a barrister, not the next decision", category: "visual", observed: "The opening occupies the captured mobile viewport.", consequence: "The next section requires scrolling.", fix: "Test tighter spacing around the existing actions.", evidence: "Mobile screenshot", imageIndex: 1, pageUrl: "https://example.test/" }] };
 const presentation = outreachReportPresentation(audit, "Example Attorneys");
@@ -20,6 +22,18 @@ const malicious = renderCompactReportHtml({ ...presentation, name: '<script>aler
 assert.ok(!malicious.includes("<script>"));
 assert.ok(!malicious.includes('href="javascript:'));
 assert.ok(!renderCompactReportHtml(presentation, "https://evil.test/").includes('href="https://evil.test/"'));
+// Fixed, human-inspected acceptance copy: rendering must never flatten the saved
+// roast back into a neutral audit or substitute generic industry wording.
+const voiceFixture = JSON.parse(readFileSync("fixtures/roast-voice-report.json", "utf8")) as {editorialVersion:string;beforeSummary:string;report:CompactReport};
+assert.equal(voiceFixture.editorialVersion,ROAST_VOICE_VERSION);
+assert.notEqual(voiceFixture.report.summary,voiceFixture.beforeSummary);
+const originalVoiceCopy=structuredClone(voiceFixture.report);
+const voiceHtml=renderCompactReportHtml(voiceFixture.report);
+assert.ok(voiceHtml.includes(voiceFixture.report.summary));
+assert.ok(voiceHtml.includes(voiceFixture.report.findings[0].headline));
+assert.ok(voiceHtml.includes(voiceFixture.report.verdict));
+assert.deepEqual(voiceFixture.report,originalVoiceCopy,'Client formatting must leave reviewed prose, source URLs and score untouched');
+assert.ok(!voiceHtml.includes('imageIndex='),'Internal screenshot IDs do not belong in the client example');
 const savedPath = "tmp/saved-client-layout-report.json";
 try {
   const saved = JSON.parse(readFileSync(savedPath, "utf8"));

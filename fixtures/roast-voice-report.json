@@ -1,0 +1,29 @@
+{
+  "description": "Approved 31 October voice acceptance on saved Veronica evidence. A rendering fixture, not a live or whole-site reassessment.",
+  "editorialVersion": "studio-roast-2026-10-31",
+  "beforeSummary": "This homepage makes a clear, distinctive snack-reseller introduction. The mobile hero already keeps “Browse the range” visible above the artwork; the sharper improvement is to make the order-confirmation caveat easier to notice before customers build an order.",
+  "report": {
+    "name": "Veronica Snacks",
+    "url": "http://veronicasnacks.xyz/",
+    "score": 5.6,
+    "meta": "Website roast | visual, UX and technical evidence",
+    "summary": "On mobile, the snacks make their entrance after the sales pitch has finished. The captured hero shows the headline, description, two actions and proof points before the product artwork begins. The proposition and ordering route are clear; a modest hero adjustment could make the offer tangible sooner.",
+    "leak": "In the mobile capture, the headline, description, two calls to action and proof points appear before the product illustration begins. Visitors may need to scroll before seeing product imagery that makes the offer immediately tangible.",
+    "strengths": [
+      "The desktop capture pairs the “Snack time, sorted.” proposition with a distinctive product illustration and visible onward actions.",
+      "The page copy sets out a three-step ordering route and states that availability is confirmed when an order is accepted."
+    ],
+    "verdict": "Keep the existing proposition and ordering structure. Bring the product imagery into the opening mobile viewport so the snack range joins the introduction rather than following it.",
+    "coverage": "1 pages sampled; desktop/mobile homepage screenshots. Interaction checks are limited to explicitly recorded observations. No form, booking or payment submission. Not a full-site audit.",
+    "technical": "5 HTML spot-checks recorded; review flags: Canonical declarations. Review flags require confirmation, not automatic repairs. Speed/Core Web Vitals, security and completed transactions were not tested.",
+    "findings": [
+      {
+        "headline": "The snacks arrive after the pitch.",
+        "observation": "In the mobile capture, the headline, description, two calls to action and proof points appear before the product illustration begins.",
+        "consequence": "Visitors may need to scroll before seeing product imagery that makes the offer immediately tangible.",
+        "fix": "Reduce vertical spacing in the mobile hero, or introduce a smaller product image alongside the opening copy while retaining the prominent “Browse the range” action.",
+        "source": "http://veronicasnacks.xyz/"
+      }
+    ]
+  }
+}
