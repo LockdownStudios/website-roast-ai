@@ -60,7 +60,7 @@ export async function GET(request:NextRequest){try{
  }
  if(request.nextUrl.searchParams.get('format')==='html'){
   if(!job.result || !job.result.technical.length&&!job.result.narrative)return NextResponse.json({error:'No supported results are ready.'},{status:409});
-  return new Response(renderCompactReportHtml(scanPresentation(job.result)),{headers:{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'self'",'Cache-Control':'private, no-store'}});
+  return new Response(renderCompactReportHtml(scanPresentation(job.result)),{headers:{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'self'",'Cache-Control':'private, no-store'}});
  }
  if(request.nextUrl.searchParams.get('format')==='pdf'){
   if(!job.result || job.result.clientReportReady===false || !job.result.technical.length&&!job.result.narrative)return NextResponse.json({error:'A client PDF has not passed report preflight. Available web results and diagnostics are retained.'},{status:409});

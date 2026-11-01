@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("format") === "html") {
     const leadId = request.nextUrl.searchParams.get("leadId");
     const download = leadId && /^[0-9a-f-]{36}$/i.test(leadId) ? `/api/reports/${leadId}/download` : undefined;
-    return new NextResponse(renderCompactReportHtml(outreachReportPresentation(report.roast.outreach, subject, report.roast.score), download), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    return new NextResponse(renderCompactReportHtml(outreachReportPresentation(report.roast.outreach, subject, report.roast.score, report.scoring), download), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
-  const pdf = await renderOutreachPdf(report.roast.outreach, false, subject || undefined, report.roast.score);
+  const pdf = await renderOutreachPdf(report.roast.outreach, false, subject || undefined, report.roast.score, report.scoring);
   return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store" } });
 }

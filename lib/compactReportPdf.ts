@@ -1,122 +1,149 @@
 import PDFDocument from "pdfkit";
+import { REPORT_COLORS as C, REPORT_LAYOUT_VERSION, REPORT_PRODUCT_URL, reportLogo } from "./reportBrand";
 
-type Block = { kind: "heading" | "body" | "box" | "small" | "scores"; title?: string; text: string };
 export type CompactReport = {
-  scorecards?: Array<{label:string;value:number|null;group?:string}>;
+  scorecards?: Array<{label:string;value:number|null;group?:string;maximum?:10|100}>;
   scorecardTitle?: string;
   scoreMaximum?: 10 | 100;
   name: string; url: string; score?: number; meta: string;
   summary: string; leak: string; strengths: string[]; verdict: string;
   coverage: string; technical: string;
+  priorityFixes?: string[];
+  customerFriction?: string;
   findings: Array<{ headline: string; observation: string; consequence?: string; fix: string; source?: string }>;
 };
 
-/** At most two pages, preflighted at readable sizes. Never clip or drop findings. */
+/** Branded paired panels; saved copy is never rewritten, clipped or truncated. */
 export function renderCompactReportPdf(report: CompactReport, draft = false): Promise<Buffer> {
-  const clean = (text: string) => text.replace(/[\u2190-\u21ff]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/\s+/g, " ").trim();
-  const scoreGroups = [...new Set(report.scorecards?.map(card=>card.group||'Scores'))].flatMap(label=>{
-    const cards=report.scorecards!.filter(card=>(card.group||'Scores')===label);
-    return Array.from({length:Math.ceil(cards.length/5)},(_,index)=>({label,cards:cards.slice(index*5,index*5+5)}));
-  });
-  const repeatedLeak=!!report.scorecards?.length&&report.findings.some(finding=>clean(finding.observation)===clean(report.leak));
-  const page1: Block[] = [
-    ...(report.scorecards?.length ? [{kind:'scores' as const,text:''}] : []),
-    { kind: "heading", text: "The Roast" }, { kind: "body", text: report.summary },
-    ...(!repeatedLeak?[{kind:'box' as const,title:'Single Biggest Leak',text:report.leak}]:[]),
-    ...(report.strengths.length ? [{ kind: "heading" as const, text: "Keep The Good Stuff" }, { kind: "body" as const, text: report.strengths.join(" / ") }] : []),
-  ];
-  const groups: Block[][] = [];
-  report.findings.forEach((finding, index) => {
-    const group: Block[] = [{ kind: "box", title: `${index + 1}. ${finding.headline}`, text: [finding.observation, finding.consequence, finding.fix ? `The fix: ${finding.fix}` : ""].filter(Boolean).join(" ") }];
-    if (finding.source) {
-      let source = finding.source;
-      try { const url = new URL(source); source = `${url.hostname}${url.pathname}`; } catch { /* Legacy display-only source. */ }
-      group.push({ kind: "small", text: `Evidence page: ${source}` });
+  const clean = (text:string) => text.replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[\u2013\u2014]/g,"-").replace(/\s+/g," ").trim();
+  return new Promise((resolve,reject)=>{
+    const doc=new PDFDocument({size:"A4",margin:42,autoFirstPage:false,bufferPages:true,info:{Title:`${report.name} - Website Roast`,Author:"Lockdown Studios",Subject:REPORT_LAYOUT_VERSION}});
+    const chunks:Buffer[]=[];
+    doc.on("data",chunk=>chunks.push(chunk));doc.on("end",()=>resolve(Buffer.concat(chunks)));doc.on("error",reject);
+    const x=42,width=511.28,bottom=775,gap=12,column=(width-gap)/2;
+    let leading=2;
+    const font=(size:number,bold=false)=>doc.font(bold?"Helvetica-Bold":"Helvetica").fontSize(size);
+    const measure=(value:string,w:number,size:number,bold=false)=>value?font(size,bold).heightOfString(clean(value),{width:w,lineGap:leading}):0;
+    const text=(value:string,left:number,top:number,w:number,size:number,bold=false,color=C.text)=>{
+      if(!value)return;
+      const h=measure(value,w,size,bold);
+      font(size,bold).fillColor(color).text(clean(value),left,top,{width:w,height:h+1,lineGap:leading});
+    };
+    type Panel={title:string;body:string;small?:boolean};
+    const panelHeight=(p:Panel,w:number,size:number)=>(size===9?22:26)+measure(p.title,w-24,9,true)+measure(p.body,w-24,p.small?8.2:size);
+    const panel=(p:Panel,left:number,top:number,w:number,h:number,size:number)=>{
+      doc.roundedRect(left,top,w,h,7).fillAndStroke(C.surface,C.line);doc.rect(left,top,4,h).fill(C.accent);
+      text(p.title,left+12,top+10,w-24,9,true,C.soft);
+      text(p.body,left+12,top+16+measure(p.title,w-24,9,true),w-24,p.small?8.2:size);
+    };
+    type Section={finding?:number;height:(size:number,start:boolean)=>number;draw:(top:number,size:number,start:boolean)=>void};
+    const sections:Section[]=[];
+    const full=(p:Panel)=>sections.push({height:size=>panelHeight(p,width,size),draw:(top,size)=>panel(p,x,top,width,panelHeight(p,width,size),size)});
+    if(report.strengths.length)full({title:"THE ROAST / CLIENT QUICK READ",body:report.summary});
+    const focus:Panel[]=report.strengths.length?[{title:"SINGLE BIGGEST LEAK",body:report.leak},{title:"KEEP THE GOOD STUFF",body:report.strengths.join("\n\n")}]:[{title:"THE ROAST / CLIENT QUICK READ",body:report.summary},{title:"SINGLE BIGGEST LEAK",body:report.leak}];
+    const focusWidth=focus.length===2?column:width;
+    sections.push({height:size=>Math.max(...focus.map(p=>panelHeight(p,focusWidth,size))),draw:(top,size)=>{
+      const h=Math.max(...focus.map(p=>panelHeight(p,focusWidth,size)));
+      focus.forEach((p,i)=>panel(p,x+i*(column+gap),top,focusWidth,h,size));
+    }});
+    for(const group of [...new Set(report.scorecards?.map(card=>card.group||"Scores"))]){
+      const cards=report.scorecards!.filter(card=>(card.group||"Scores")===group);
+      sections.push({height:size=>(size===9?16:22)+Math.ceil(cards.length/(size===9?5:4))*(size===9?35:51),draw:(top,size)=>{
+        const columns=size===9?5:4,rowStep=size===9?35:51,titleH=size===9?16:22;
+        text(group.toUpperCase(),x,top,width,size===9?9:11,true,C.soft);
+        cards.forEach((card,i)=>{
+          const w=(width-(columns-1)*gap)/columns,left=x+(i%columns)*(w+gap),y=top+titleH+Math.floor(i/columns)*rowStep;
+          doc.roundedRect(left,y,w,size===9?30:43,6).fillAndStroke(C.score,C.line);
+          text(card.label,left+8,y+(size===9?3:6),w-16,size===9?6.8:7.3,false,C.muted);
+          text(card.value===null?"Not assessed":`${card.value}/${card.maximum||100}`,left+8,y+(size===9?15:20),w-16,card.value===null?8:size===9?11:15,true,C.soft);
+        });
+      }});
     }
-    groups.push(group);
-  });
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 42, autoFirstPage: false, bufferPages: true, info: { Title: `${report.name} - Website Roast`, Author: "Website Roast AI" } });
-    const width = 511.28;
-    const bottom = 778;
-    const chunks: Buffer[] = [];
-    doc.on("data", chunk => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    const titleWidth=report.score===undefined?width:width-108;
-    const titleSize=18;
-    const titleHeight=doc.font('Helvetica-Bold').fontSize(titleSize).heightOfString(clean(report.name),{width:titleWidth,lineGap:0});
-    const urlY=45+titleHeight+4;
-    const urlHeight=doc.font('Helvetica').fontSize(7.5).heightOfString(clean(report.url),{width,lineGap:1});
-    const metaY=urlY+urlHeight+3;
-    const metaHeight=doc.fontSize(7.5).heightOfString(clean(report.meta),{width,lineGap:1});
-    const firstPageStart=Math.ceil(metaY+metaHeight+8);
-    function layout(blocks: Block[], start: number, font: number) {
-      let y = start;
-      const rows = blocks.map(block => {
-        if(block.kind==='scores'){const height=scoreGroups.length*30+5;const row={block,y,height,size:10,titleHeight:0};y+=height+3;return row;}
-        const inset = block.kind === "box" ? 20 : 0;
-        const size = block.kind === "heading" ? 12 : block.kind === "small" ? 7.5 : font;
-        doc.font(block.kind === "heading" ? "Helvetica-Bold" : "Helvetica").fontSize(size);
-        const titleHeight = block.title ? doc.font("Helvetica-Bold").fontSize(block.kind === "small" ? 8 : 10).heightOfString(clean(block.title).toUpperCase(), { width: width - inset, lineGap: 1 }) + 4 : 0;
-        const height = titleHeight + doc.font(block.kind === "heading" ? "Helvetica-Bold" : "Helvetica").fontSize(size).heightOfString(clean(block.text), { width: width - inset, lineGap: 1 }) + (block.kind === "box" ? 12 : block.kind === "heading" ? 7 : 5);
-        const row = { block, y, height, size, titleHeight };
-        y += height + (block.kind === "box" ? 4 : 0);
-        return row;
-      });
-      return { rows, fits: y <= bottom };
-    }
-    let plans: ReturnType<typeof layout>[] = [];
-    for(const font of [10,9.5]){
-      const single = layout([...page1, { kind: "heading", text: "The Problems. The Fixes." }, ...groups.flat(), { kind: "heading", text: "The Verdict" }, { kind: "body", text: report.verdict }, { kind: "small", title: "Checks & coverage", text: [report.technical, report.coverage].filter(Boolean).join(" ") }], firstPageStart, font);
-      if(single.fits){plans=[single];break;}
-    }
-    for (const font of [10, 9.5]) {
-      if (plans.length) break;
-      const candidates: Array<{ plans: ReturnType<typeof layout>[]; imbalance: number }> = [];
-      for (let split = 0; split <= Math.min(2, groups.length - 1); split++) {
-        const first: Block[] = [...page1, ...(split ? [{ kind: "heading" as const, text: "The Problems. The Fixes." }, ...groups.slice(0, split).flat()] : [])];
-        const second: Block[] = [{ kind: "heading", text: split ? "The Roast Continues" : "The Problems. The Fixes." }, ...groups.slice(split).flat(), { kind: "heading", text: "The Verdict" }, { kind: "body", text: report.verdict }, { kind: "small", title: "Checks & coverage", text: [report.technical, report.coverage].filter(Boolean).join(" ") }];
-        const a = layout(first, firstPageStart, font), b = layout(second, 61, font);
-        if (a.fits && b.fits) candidates.push({ plans: [a, b], imbalance: Math.abs(a.rows.at(-1)!.y + a.rows.at(-1)!.height - b.rows.at(-1)!.y - b.rows.at(-1)!.height) });
-      }
-      if (candidates.length) { candidates.sort((a, b) => a.imbalance - b.imbalance); plans = candidates[0].plans; break; }
-    }
-    if (!plans.length) { reject(new Error("Report exceeds the two-page editorial budget. Shorten the narrative; content was not clipped or omitted.")); doc.end(); return; }
-    plans.forEach((plan, page) => {
-      doc.addPage();
-      doc.rect(0, 0, doc.page.width, doc.page.height).fill("#090d14");
-      if (!page) {
-        doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffd7b2").text("WEBSITE ROAST AI", 42, 29, { width, height: 12 });
-        doc.fontSize(titleSize).fillColor("#f6f7fb").text(clean(report.name), 42, 45, { width:titleWidth, height:titleHeight+1,lineGap:0 });
-        if (report.score !== undefined) doc.fontSize(19).fillColor("#ffd7b2").text(report.scoreMaximum===100?`${Math.round(report.score)}/100`:`${report.score.toFixed(1)}/10`, 460, 45, { width: 93, align: "right", height: 25 });
-        doc.font("Helvetica").fontSize(7.5).fillColor("#9aa5b7").text(clean(report.url),42,urlY,{width,height:urlHeight+1,lineGap:1});
-        doc.text(clean(report.meta),42,metaY,{width,height:metaHeight+1,lineGap:1});
-      } else doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffd7b2").text(`WEBSITE ROAST AI / ${clean(report.name)}`, 42, 39, { width, height: 18 });
-      plan!.rows.forEach(({ block, y, height, size, titleHeight }) => {
-        if(block.kind==='scores'){
-          scoreGroups.forEach((group,index)=>{
-            const top=y+index*30,cellWidth=(width-76)/group.cards.length;
-            doc.font('Helvetica-Bold').fontSize(8).fillColor('#cbd5e1').text(clean(group.label),42,top+4,{width:70,height:13});
-            doc.font('Helvetica').fontSize(7).fillColor('#9aa5b7').text('out of 100',42,top+17,{width:70,height:10});
-            group.cards.forEach((card,column)=>{const x=118+column*cellWidth;doc.font('Helvetica').fontSize(7).fillColor('#9aa5b7').text(clean(card.label),x,top+2,{width:cellWidth-6,height:10});doc.font('Helvetica-Bold').fontSize(12).fillColor('#ffd7b2').text(card.value===null?'N/A':String(card.value),x,top+13,{width:cellWidth-6,height:14});});
-            doc.moveTo(42,top+29).lineTo(553,top+29).lineWidth(.5).strokeColor('#263346').stroke();
-          });return;
+    if(!report.priorityFixes?.length)report.findings.forEach((finding,index)=>{
+      const heading=(start:boolean)=>index===0||start?29:0,leftTitle=`${index+1}. ${finding.headline}`;
+      const observed=[finding.observation,finding.consequence].filter(Boolean).join(" ");
+      const source=finding.source?`Evidence page: ${finding.source}`:"";
+      const issueWidth=finding.fix?column:width;
+      const rowHeight=(size:number)=>Math.max((size===9?26:30)+measure(leftTitle,issueWidth-24,9,true)+measure(observed,issueWidth-24,size)+(source?9+measure(source,issueWidth-24,7.5):0),finding.fix?panelHeight({title:`${index+1}. QUICK WIN`,body:finding.fix},column,size):0);
+      sections.push({finding:index,height:(size,start)=>heading(start)+rowHeight(size),draw:(top,size,start)=>{
+        if(heading(start)){
+          text(index===0?"THE PROBLEMS. THE FIXES.":"THE ROAST CONTINUES",x,top,width,12,true);
+          doc.moveTo(x,top+20).lineTo(x+width,top+20).lineWidth(1).strokeColor(C.accent).stroke();
         }
-        const inset = block.kind === "box" ? 10 : 0;
-        if (block.kind === "box") {
-          doc.roundedRect(42, y, width, height, 4).fillAndStroke("#0e1520", "#263346");
-          doc.rect(42, y, 2.5, height).fill("#f76b1c");
-        }
-        const top = y + (block.kind === "box" ? 6 : 0);
-        if (block.title) doc.font("Helvetica-Bold").fontSize(block.kind === "small" ? 8 : 10).fillColor("#ffd7b2").text(clean(block.title), 42 + inset, top, { width: width - inset * 2, height: titleHeight, lineGap: 1 });
-        doc.font(block.kind === "heading" ? "Helvetica-Bold" : "Helvetica").fontSize(size).fillColor(block.kind === "small" ? "#9aa5b7" : "#f6f7fb").text(clean(block.text), 42 + inset, top + titleHeight, { width: width - inset * 2, height: height - titleHeight, lineGap: 1 });
-      });
-      if (draft) {
-        doc.rect(0, 0, doc.page.width, 24).fill("#f76b1c");
-        doc.font("Helvetica-Bold").fontSize(8).fillColor("#070708").text("INTERNAL DRAFT - NOT APPROVED FOR CLIENTS", 42, 8, { width, height: 13, align: "center" });
+        const y=top+heading(start),h=rowHeight(size);
+        panel({title:leftTitle,body:observed},x,y,issueWidth,h,size);
+        if(source)text(source,x+12,y+h-10-measure(source,issueWidth-24,7.5),issueWidth-24,7.5,false,C.muted);
+        if(finding.fix)panel({title:`${index+1}. QUICK WIN`,body:finding.fix},x+column+gap,y,column,h,size);
+      }});
+    });
+    if(report.customerFriction)full({title:"POSSIBLE CUSTOMER FRICTION",body:report.customerFriction});
+    full({title:"THE VERDICT / RECOMMENDED NEXT STEP",body:report.verdict});
+    if(report.priorityFixes?.length){
+      // Legacy arrays are independent lists, even when they have equal lengths.
+      // A shared row or number would invent an issue-to-fix relationship.
+      const lists=[{title:"TOP ISSUES",items:report.findings.map(f=>[f.headline,f.observation,f.consequence,f.source?`Evidence page: ${f.source}`:""].filter(Boolean).join(" "))},{title:"QUICK WINS / PRIORITY FIXES",items:report.priorityFixes}];
+      const listHeight=(items:string[],size:number)=>36+items.reduce((total,item)=>total+measure(item,column-34,size)+8,0);
+      sections.push({height:size=>Math.max(...lists.map(list=>listHeight(list.items,size))),draw:(top,size)=>{
+        const h=Math.max(...lists.map(list=>listHeight(list.items,size)));
+        lists.forEach((list,index)=>{
+          const left=x+index*(column+gap);
+          doc.roundedRect(left,top,column,h,7).fillAndStroke(C.surface,C.line);
+          text(list.title,left+12,top+10,column-24,9,true,C.soft);
+          let y=top+29;
+          for(const item of list.items){doc.circle(left+12,y+4,1.6).fill(C.accent);text(item,left+20,y,column-34,size);y+=measure(item,column-34,size)+8;}
+        });
+      }});
+    }
+    full({title:"CHECKS & COVERAGE / REVIEW SCOPE",body:[report.technical,report.coverage].filter(Boolean).join(" "),small:true});
+    const title=`${report.name} Website Roast`,titleSize=title.length>55?23:27;
+    const titleY=110,titleH=measure(title,width,titleSize,true),metaY=titleY+titleH+14,metaW=width-130;
+    const urlH=measure(report.url,metaW-20,8.5,true),metaH=measure(report.meta,metaW-20,8.2);
+    const infoH=Math.max(82,urlH+metaH+32),firstStart=metaY+infoH+14;
+    const plan=(items:Section[],start:number,size:number)=>{
+      let y=start;
+      const sectionGap=size===9?8:10;
+      const rows=items.map((section,i)=>{const height=section.height(size,i===0);const row={section,y,height,start:i===0};y+=height+sectionGap;return row;});
+      return {rows,end:y-sectionGap,fits:y-sectionGap<=bottom};
+    };
+    let plans:ReturnType<typeof plan>[]=[],bodySize=10;
+    for(const size of [10,9.5,9]){
+      leading=size===9?1:2;
+      const single=plan(sections,firstStart,size);
+      if(single.fits){plans=[single];bodySize=size;break;}
+      const candidates=[];
+      for(let split=2;split<sections.length;split++){
+        const a=plan(sections.slice(0,split),firstStart,size),b=plan(sections.slice(split),78,size);
+        if(a.fits&&b.fits)candidates.push({plans:[a,b],imbalance:Math.abs(a.end-b.end)});
       }
-      doc.font("Helvetica").fontSize(7).fillColor("#9aa5b7").text(`Lockdown Studios | ${draft ? "Internal draft" : "Website Roast"} | ${page + 1}/${plans.length}`, 42, 789, { width, height: 10, lineBreak: false });
+      if(candidates.length){candidates.sort((a,b)=>a.imbalance-b.imbalance);plans=candidates[0].plans;bodySize=size;break;}
+    }
+    if(!plans.length){reject(new Error("Report exceeds the two-page editorial budget. Content was not clipped or omitted."));doc.end();return;}
+    const logo=reportLogo();
+    plans.forEach((page,index)=>{
+      doc.addPage();doc.rect(0,0,doc.page.width,doc.page.height).fill(C.background);
+      if(!index){
+        doc.rect(0,0,doc.page.width,80).fill(C.surface);doc.rect(0,78,doc.page.width,2).fill(C.accent);
+        if(logo)doc.image(logo,x,24,{fit:[32,32]});
+        text("LOCKDOWN STUDIOS",x+(logo?43:0),27,width-50,11,true);
+        text("Website Roast Report",x+(logo?43:0),44,width-50,8,false,C.muted);
+        text("ROAST REPORT",x,95,width,8,true,C.soft);text(title,x,titleY,width,titleSize,true);
+        doc.roundedRect(x,metaY,metaW,infoH,7).fillAndStroke(C.black,C.line);
+        text(report.url,x+10,metaY+10,metaW-20,8.5,true);
+        text(report.meta,x+10,metaY+19+urlH,metaW-20,8.2,false,C.muted);
+        const bx=x+width-118;
+        doc.roundedRect(bx,metaY,118,infoH,9).fillAndStroke(C.black,C.line);
+        text("SCORE",bx+12,metaY+10,94,8,true,C.muted);
+        text(report.score===undefined?"Not assessed":report.scoreMaximum===100?String(Math.round(report.score)):report.score.toFixed(1),bx+12,metaY+27,94,report.score===undefined?11:31,true,C.soft);
+        if(report.score!==undefined)text(`OUT OF ${report.scoreMaximum||10}`,bx+12,metaY+infoH-18,94,7.5,true,C.muted);
+      }else{
+        text("LOCKDOWN STUDIOS / WEBSITE ROAST",x,25,width,8,true,C.soft);
+        text("REPORT DETAILS",x,43,width,15,true);
+        doc.moveTo(x,67).lineTo(x+width,67).lineWidth(1).strokeColor(C.accent).stroke();
+      }
+      page.rows.forEach(row=>row.section.draw(row.y,bodySize,row.start));
+      if(draft){doc.rect(0,0,doc.page.width,19).fill(C.accent);text("INTERNAL DRAFT - NOT APPROVED FOR CLIENTS",x,5,width,7.5,true,C.black);}
+      text(`Lockdown Studios | Website Roast | ${index+1}/${plans.length}`,x,792,width-120,7,false,C.muted);
+      font(7).fillColor(C.muted).text("Website Roast AI",x+width-100,792,{width:100,height:10,align:"right",link:REPORT_PRODUCT_URL,lineBreak:false});
     });
     doc.end();
   });
